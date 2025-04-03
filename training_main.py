@@ -6,6 +6,7 @@ import gym
 from env.hanoi import TowersOfHanoi
 from Muzero import Muzero
 from utils import setup_logger
+import argparse
 
 def get_env(env_name):
     if env_name == 'Hanoi':
@@ -31,16 +32,15 @@ np.random.seed(s)
 setup_logger(s)
 
 ## ======= Select the environment ========
-
-env_n = 1 # 0: 'Hanoi', 1: 'CartPole'
-
-## ========= Useful variables: ===========
-training_loops = 4000#00000
-=======
-env_n = 0 # 0: 'Hanoi', 1: 'CartPole'
+parser = argparse.ArgumentParser()
+parser.add_argument('--env','-e',type=str,nargs='?',default='h') # model type: base, SFT, DPO
+# Extract arguments
+args = parser.parse_args()
+env_p = args.env
 
 ## ========= Useful variables: ===========
 
+training_loops = 5000#00000
 min_replay_size = 5000
 dirichlet_alpha = 0.25
 n_ep_x_loop = 1#20
@@ -55,30 +55,32 @@ priority_replay = True
 # Select correct device
 if torch.cuda.is_available():
     dev='cuda'
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available(): ## for MAC GPU usage
-    dev='mps'
+#elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available(): ## for MAC GPU usage
+#    dev='mps'
 else:
     dev='cpu'
 
 
-if env_n ==0:
+if env_p =='h':
     env_name = 'Hanoi' 
     batch_s = 256 #512
     discount = 0.8
     n_mcts_simulations = 25 #11 during acting n. of mcts passes for each step
     lr = 0.002
-elif env_n == 1:
+elif env_p == 'c':
     env_name = "CartPole-v1" 
     batch_s = 256
     discount = 0.997
     n_mcts_simulations=50
     lr=0.005
+else:
+    raise ValueError("Unknown environment prefix, avilable env are 'h':hanoi, 'c':Cartopole")
 
 ## ========= Initialise env ========
 env, s_space_size, n_action, max_steps, n_disks = get_env(env_name)
 
 ## ====== Log command line =====
-command_line = f'Env: {env_name}, Training Loops: {training_loops}, Min replay size: {min_replay_size}, lr: {lr}, discount: {discount}, n. MCTS: {n_mcts_simulations}, batch size: {batch_s}, TD_return: {TD_return}, Priority Buff: {priority_replay}'
+command_line = f'Env: {env_name}, Training Loops: {training_loops}, Min replay size: {min_replay_size}, lr: {lr}, discount: {discount}, n. MCTS: {n_mcts_simulations}, batch size: {batch_s}, TD_return: {TD_return}, Priority Buff: {priority_replay}, device: {dev}'
 if env_name == 'Hanoi': # if hanoi also print n. of disks
     command_line += f', N. disks: {n_disks}'
 logging.info(command_line)
