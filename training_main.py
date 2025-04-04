@@ -1,12 +1,15 @@
-import os
-import torch
-import numpy as np
+import argparse
 import logging
+import os
+
 import gym
+import numpy as np
+import torch
+
 from env.hanoi import TowersOfHanoi
 from Muzero import Muzero
 from utils import setup_logger
-import argparse
+
 
 def get_env(env_name):
     if env_name == 'Hanoi':
@@ -40,7 +43,7 @@ env_p = args.env
 
 ## ========= Useful variables: ===========
 
-training_loops = 5000#00000
+training_loops = 50#0000000
 min_replay_size = 5000
 dirichlet_alpha = 0.25
 n_ep_x_loop = 1#20
@@ -89,7 +92,7 @@ logging.info(command_line)
 muzero = Muzero(env=env, s_space_size=s_space_size, n_action=n_action, discount=discount, dirichlet_alpha=dirichlet_alpha, n_mcts_simulations=n_mcts_simulations, unroll_n_steps=unroll_n_steps, batch_s=batch_s, TD_return=TD_return,n_TD_step=n_TD_step, lr=lr, buffer_size=buffer_size, priority_replay=priority_replay, device=dev, n_ep_x_loop=n_ep_x_loop, n_update_x_loop=n_update_x_loop)
 
 ## ======== Run training ==========
-tot_acc = muzero.training_loop(training_loops, min_replay_size)
+tot_acc = muzero.training_loop(training_loops, min_replay_size, print_acc=10)
 
 ## ===== Save results =========
 file_indx = 1 
