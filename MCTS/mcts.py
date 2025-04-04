@@ -22,7 +22,7 @@ class MCTS:
         root_exploration_eps=0.25,
         known_bounds=[],
         reuse_tree=True,
-        rebuild_frequency=5
+        rebuild_frequency=5,
     ):
         self.min_max_stats = MinMaxStats()
         self.pb_c_base = 19652
@@ -35,8 +35,10 @@ class MCTS:
         self.batch_s = batch_s
         self.dev = device
 
-        self.reuse_tree = reuse_tree       # Option to reuse/save the tree
-        self.rebuild_frequency = rebuild_frequency  # Number of moves before rebuilding/pruning
+        self.reuse_tree = reuse_tree  # Option to reuse/save the tree
+        self.rebuild_frequency = (
+            rebuild_frequency  # Number of moves before rebuilding/pruning
+        )
         self.current_step = 0
         self.root = None
 
@@ -53,17 +55,24 @@ class MCTS:
             a 1D numpy.array search policy action probabilities from the MCTS search result.
             a float represent the value of the root node (based on the search).
         """
-        
-        if self.reuse_tree and not(self.current_step % self.rebuild_frequency == 0) and self.root is not None and self.root.is_expanded:
+
+        if (
+            self.reuse_tree
+            and not (self.current_step % self.rebuild_frequency == 0)
+            and self.root is not None
+            and self.root.is_expanded
+        ):
             self.current_step += 1
             child = self.root.best_child(self, self.min_max_stats)
             self.root = child
             action = child.move
             if len(child.child_N) != 0:
-                pi_prob = self.generate_play_policy(child.child_N, temperature) # some issue when this is empty when it has 0 visits
+                pi_prob = self.generate_play_policy(
+                    child.child_N, temperature
+                )  # some issue when this is empty when it has 0 visits
                 child_Q = child.Q
                 return action, pi_prob, child_Q
-            
+
         self.root = None
         self.current_step = 1
 
@@ -71,7 +80,9 @@ class MCTS:
         state = torch.from_numpy(state).to(self.dev, dtype=torch.float32)
         h_state, rwd, pi_probs, value = network.initial_inference(state)
         prior_prob = pi_probs
-        root_node = Node(prior=0.0)  # the root node does not have prior probs since it is the root
+        root_node = Node(
+            prior=0.0
+        )  # the root node does not have prior probs since it is the root
 
         # Add dirichlet noise to the prior probabilities to root node.
         if (

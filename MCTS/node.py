@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Node:
-    """ Nodes in the MCTS"""
+    """Nodes in the MCTS"""
 
     def __init__(self, prior=None, move=None, parent=None):
         """
@@ -16,17 +16,17 @@ class Node:
         self.prior = prior
         self.move = move
         self.parent = parent
-        self.is_expanded = False # has the node been expanded into children
+        self.is_expanded = False  # has the node been expanded into children
 
-        self.N = 0 # n of visits
-        self.W = 0.0 # summed action value
+        self.N = 0  # n of visits
+        self.W = 0.0  # summed action value
 
         # Note, rwd is needed to update the value at the previous s (i.e., the s leading to current s), together with the value at current s in backup()
-        self.rwd = 0.0 
+        self.rwd = 0.0
         self.h_state = None
 
         self.children = []
-    
+
     def expand(self, prior, h_state, reward):
         """Expand all actions, including illegal actions.
 
@@ -47,9 +47,8 @@ class Node:
         for action in range(0, prior.shape[0]):
             child = Node(prior=prior[action], move=action, parent=self)
             self.children.append(child)
-                
-        self.is_expanded = True        
-    
+
+        self.is_expanded = True
 
     def backup(self, value, config, min_max_stats):
         """Update statistics of the this node and all travesed parent nodes.
@@ -62,35 +61,34 @@ class Node:
 
         while current is not None:
             current.W += value
-            current.N +=1
+            current.N += 1
 
             ## Not clear why need to update since the min/max bounds set at initialisation
             min_max_stats.update(current.rwd + config.discount * current.Q)
 
             value = current.rwd + config.discount * value
             current = current.parent
- 
 
     def best_child(self, config, min_max_stats):
-        """ Returns best child node with maximum action value Q plus an upper confidence bound U.
+        """Returns best child node with maximum action value Q plus an upper confidence bound U.
         Args:
             config: a MCTS instance.
         Returns:
             The best child node.
-        """    
+        """
 
         if not self.is_expanded:
-            raise ValueError('Expand leaf node first.')
+            raise ValueError("Expand leaf node first.")
 
         ucb_results = self.child_Q(config, min_max_stats) + self.child_U(config)
-        #print('Q: ', self.child_Q(config, min_max_stats))
-        #print('U: ', self.child_U(config))
-        #print('ucb: ',ucb_results)
+        # print('Q: ', self.child_Q(config, min_max_stats))
+        # print('U: ', self.child_U(config))
+        # print('ucb: ',ucb_results)
 
         # Break ties when have multiple 'max' value.
         a_indx = np.random.choice(np.where(ucb_results == ucb_results.max())[0])
 
-        return self.children[a_indx] # return best child
+        return self.children[a_indx]  # return best child
 
     def child_Q(self, config, min_max_stats):
         """Returns a 1D numpy.array contains mean action value for all children.
@@ -101,28 +99,35 @@ class Node:
         # Compute normalised value for each children, if never visisted value=0
         Q = []
         for child in self.children:
-            if child.N >0:
+            if child.N > 0:
                 Q.append(min_max_stats.normalize(child.rwd + config.discount * child.Q))
             else:
                 Q.append(0)
-        return np.array(Q,dtype=np.float32)
-    
+        return np.array(Q, dtype=np.float32)
+
     def child_U(self, config):
-        """ Returns a 1D numpy.array contains UCB score for all children (i.e., the exploration bonus).
-         Returns:
-             a 1D numpy.array contains UCB score for each of the children nodes.
+        """Returns a 1D numpy.array contains UCB score for all children (i.e., the exploration bonus).
+        Returns:
+            a 1D numpy.array contains UCB score for each of the children nodes.
         """
         U = []
         for child in self.children:
             # Note self.N refers to the current node, so to the sum of all actions counts
             # child.N refers to the child count, so how many times the action leading to the child has been taken
-            w = (( math.log((self.N + config.pb_c_base + 1) / config.pb_c_base) + config.pb_c_init) * math.sqrt(self.N) / (child.N +1))
+            w = (
+                (
+                    math.log((self.N + config.pb_c_base + 1) / config.pb_c_base)
+                    + config.pb_c_init
+                )
+                * math.sqrt(self.N)
+                / (child.N + 1)
+            )
             U.append(child.prior * w)
-        return np.array(U,dtype=np.float32)    
+        return np.array(U, dtype=np.float32)
 
-    @property 
+    @property
     def Q(self):
-        """ Returns the mean action value Q(s, a)."""
+        """Returns the mean action value Q(s, a)."""
 
         if self.N == 0:
             return 0.0
@@ -131,9 +136,9 @@ class Node:
     @property
     def child_N(self):
         """Returns a 1D numpy.array contains visits count for all child."""
-        return np.array([child.N for child in self.children],dtype=np.int32)
+        return np.array([child.N for child in self.children], dtype=np.int32)
 
     @property
     def has_parent(self):
-        """ Returns boolean if node has parent """
+        """Returns boolean if node has parent"""
         return isinstance(self.parent, Node)
