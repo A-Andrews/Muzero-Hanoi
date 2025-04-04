@@ -208,3 +208,34 @@ class MCTS:
             visits_count = np.power(visits_count, exp)
 
         return visits_count / np.sum(visits_count)
+
+    def merge_trees(self, new_root):
+        """Merge the new tree with the current tree.
+        Args:
+            new_root: a Node instance representing the new root node of the new tree.
+        """
+        if self.root is None:
+            self.root = new_root
+            return
+
+        # Merge the new tree with the current tree
+        self.root.merge(new_root)
+
+        self.root.N += new_root.N
+        self.root.W += new_root.W
+
+        # merge reward and value
+
+        for new_child in new_root.children:
+            matching_child = None
+            for old_child in self.root.children:
+                if old_child.move == new_child.move:
+                    matching_child = old_child
+                    break
+
+            if matching_child:
+                # Recursively merge if both nodes exist.
+                self.merge_trees(matching_child, new_child)
+            else:
+                # Otherwise, add the new child to the old node's children.
+                self.root.children.append(new_child)
