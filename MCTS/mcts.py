@@ -217,7 +217,7 @@ class MCTS:
 
         return visits_count / np.sum(visits_count)
 
-    def merge_trees(self, old_root, new_root):
+    def merge_trees(self, old_root, new_root, bias=0.5):
         """Merge the new tree with the current tree.
         Args:
             new_root: a Node instance representing the new root node of the new tree.
@@ -248,3 +248,4 @@ class MCTS:
             else:
                 # Otherwise, add the new child to the old node's children.
                 old_root.children.append(new_child)
+        return old_root
