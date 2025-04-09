@@ -230,8 +230,8 @@ class MCTS:
 
         # Merge the new tree with the current tree
 
-        old_root.N += new_root.N
-        old_root.W += new_root.W
+        old_root.N = int(old_root.N * bias + new_root.N * (1 - bias))
+        old_root.W = old_root.W * bias + new_root.W * (1 - bias)
 
         # merge reward and value
 
