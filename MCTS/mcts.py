@@ -21,8 +21,9 @@ class MCTS:
         clip_grad=True,
         root_exploration_eps=0.25,
         known_bounds=[],
-        reuse_tree=True,
+        reuse_tree=False,
         rebuild_frequency=5,
+        merge_tree=False,
     ):
         self.min_max_stats = MinMaxStats()
         self.pb_c_base = 19652
@@ -41,6 +42,8 @@ class MCTS:
         )
         self.current_step = 0
         self.root = None
+
+        self.merge_tree = merge_tree
 
     def run_mcts(self, state, network, temperature, deterministic):
         """Run MCT
@@ -61,6 +64,7 @@ class MCTS:
             and not (self.current_step % self.rebuild_frequency == 0)
             and self.root is not None
             and self.root.is_expanded
+            and not self.merge_tree
         ):
             self.current_step += 1
             child = self.root.best_child(self, self.min_max_stats)
@@ -73,7 +77,6 @@ class MCTS:
                 child_Q = child.Q
                 return action, pi_prob, child_Q
 
-        self.root = None
         self.current_step = 1
 
         # Create root node
@@ -153,7 +156,12 @@ class MCTS:
             action_idx = np.random.choice(np.arange(pi_prob.shape[0]), p=pi_prob)
 
         action = root_node.children[action_idx].move
-        self.root = root_node
+        if self.merge_tree:
+            # Merge the new tree with the current tree
+            self.root = self.merge_trees(self.root, root_node)
+        else:
+            # Reset the root node to the new root node
+            self.root = root_node
 
         # pi_prob and root_node.Q are returned to be stored for the training phase
         # root_node.Q is only needed if use TD-returns, by bootstrapping value of future (root) states to update values of current (root) state
@@ -209,26 +217,27 @@ class MCTS:
 
         return visits_count / np.sum(visits_count)
 
-    def merge_trees(self, new_root):
+    def merge_trees(self, old_root, new_root):
         """Merge the new tree with the current tree.
         Args:
             new_root: a Node instance representing the new root node of the new tree.
         """
-        if self.root is None:
-            self.root = new_root
-            return
+
+        if old_root is not None and old_root.is_expanded:
+            old_root = old_root.best_child(self, self.min_max_stats)
+        else:
+            return new_root
 
         # Merge the new tree with the current tree
-        self.root.merge(new_root)
 
-        self.root.N += new_root.N
-        self.root.W += new_root.W
+        old_root.N += new_root.N
+        old_root.W += new_root.W
 
         # merge reward and value
 
         for new_child in new_root.children:
             matching_child = None
-            for old_child in self.root.children:
+            for old_child in old_root.children:
                 if old_child.move == new_child.move:
                     matching_child = old_child
                     break
@@ -238,4 +247,4 @@ class MCTS:
                 self.merge_trees(matching_child, new_child)
             else:
                 # Otherwise, add the new child to the old node's children.
-                self.root.children.append(new_child)
+                old_root.children.append(new_child)
