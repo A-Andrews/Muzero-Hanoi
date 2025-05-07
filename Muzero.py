@@ -78,7 +78,7 @@ class Muzero:
         )
         self.priority_replay = priority_replay
 
-    def training_loop(self, n_loops, min_replay_size, print_acc=50):
+    def training_loop(self, n_loops, min_replay_size, print_acc=5):
 
         logging.info("Training started \n")
 

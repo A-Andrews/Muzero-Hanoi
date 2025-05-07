@@ -70,9 +70,9 @@ else:
 
 if env_p == "h":
     env_name = "Hanoi"
-    batch_s = 256  # 512
+    batch_s = 10  # 512
     discount = 0.8
-    n_mcts_simulations = 25  # 11 during acting n. of mcts passes for each step
+    n_mcts_simulations = 5  # 11 during acting n. of mcts passes for each step
     lr = 0.002
 elif env_p == "c":
     env_name = "CartPole-v1"
@@ -82,7 +82,7 @@ elif env_p == "c":
     lr = 0.005
 else:
     raise ValueError(
-        "Unknown environment prefix, avilable env are 'h':hanoi, 'c':Cartopole"
+        "Unknown environment prefix, avilable env are 'h':hanoi, 'c':Cartpole"
     )
 
 ## ========= Initialise env ========
