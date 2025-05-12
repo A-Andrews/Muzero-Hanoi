@@ -75,16 +75,16 @@ if reset_latent_policy:
     )  # Try randomly initialising policy net, to simulate cerebellum damage
 
 # Reset latent values
-reset_latent_values = False
+reset_latent_values = True
 if reset_latent_values:
     networks.value_net.apply(networks.reset_param)
 
-reset_latent_rwds = False
+reset_latent_rwds = True
 if reset_latent_rwds:
     networks.rwd_net.apply(networks.reset_param)
 
 ## ------ Define starting states for additional analysis ----
-start = 2  # set to None for random starting state
+start = 0  # set to None for random starting state
 if start is not None:
     # I specifically selected states which are not ecounted during the optimal traject from the training starting state
     # ES: early state, MS: mid state, LS: late state

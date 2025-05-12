@@ -47,7 +47,7 @@ env_p = args.env
 
 ## ========= Useful variables: ===========
 
-training_loops = 500  # 0000000
+training_loops = 500000
 min_replay_size = 5000
 dirichlet_alpha = 0.25
 n_ep_x_loop = 1  # 20

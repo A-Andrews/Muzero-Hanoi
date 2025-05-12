@@ -80,11 +80,11 @@ if reset_latent_policy:
     )  # Try randomly initialising policy net, to simulate cerebellum damage
 
 # Reset latent values
-reset_latent_values = False
+reset_latent_values = True
 if reset_latent_values:
     networks.value_net.apply(networks.reset_param)
 
-reset_latent_rwds = False
+reset_latent_rwds = True
 if reset_latent_rwds:
     networks.rwd_net.apply(networks.reset_param)
 
