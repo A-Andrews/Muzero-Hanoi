@@ -38,31 +38,31 @@ class MuZeroNet(nn.Module):
 
         self.representation_net = nn.Sequential(
             nn.Linear(rpr_input_s, h1_s),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(h1_s, reprs_output_size),
         )
 
         self.dynamic_net = nn.Sequential(
             nn.Linear(reprs_output_size + action_s, h1_s),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(h1_s, reprs_output_size),
         )
 
         self.rwd_net = nn.Sequential(
             nn.Linear(reprs_output_size, h1_s),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(h1_s, self.support_size),
         )
 
         self.policy_net = nn.Sequential(
             nn.Linear(reprs_output_size, h1_s),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(h1_s, action_s),
         )
 
         self.value_net = nn.Sequential(
             nn.Linear(reprs_output_size, h1_s),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(h1_s, self.support_size),
         )
 
