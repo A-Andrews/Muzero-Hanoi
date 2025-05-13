@@ -1,9 +1,8 @@
 #!/bin/bash
-#SBATCH --partition=gpu_short
+#SBATCH --partition=gpu_long
 #SBATCH --job-name=muzero_hanoi
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
-#SBATCH --time=03:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
