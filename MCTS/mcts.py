@@ -80,7 +80,7 @@ class MCTS:
         self.current_step = 1
 
         # Create root node
-        state = torch.from_numpy(state).to(self.dev, dtype=torch.float32)
+        state = torch.tensor(state, device=self.dev, dtype=torch.float32)
         h_state, rwd, pi_probs, value = network.initial_inference(state)
         prior_prob = pi_probs
         root_node = Node(
@@ -121,9 +121,8 @@ class MCTS:
                 # print('Move: ', node.move,"\n")
 
             ## ==== Phase 2 - Expand leaf - based on parent state and action associated to that (best) leaf ====
-            h_state = torch.from_numpy(node.parent.h_state).to(
-                self.dev, dtype=torch.float32
-            )  # node.parent because while loop ends at not expanded (best) child
+            h_state = torch.tensor(node.parent.h_state, dtype=torch.float32, device=self.dev)
+            # node.parent because while loop ends at not expanded (best) child
             action = torch.tensor([node.move], dtype=torch.long, device=self.dev)
 
             # Convert action to 1-hot encoding
