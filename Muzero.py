@@ -68,6 +68,8 @@ class Muzero:
             device=self.dev,
         ).to(self.dev)
 
+        self.networks = torch.compile(self.networks, mode="reduce-overhead")
+
         ## ========== Initialise buffer ========
         self.buffer = Buffer(
             buffer_size,

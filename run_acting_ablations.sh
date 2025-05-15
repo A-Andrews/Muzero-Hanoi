@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=gpu_short
-#SBATCH --job-name=muzero_hanoi
+#SBATCH --job-name=muzero_hanoi_ablation_results
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -13,12 +13,8 @@ echo "Operating system: "`uname -s`
 echo "Username: "`whoami`
 echo "Started at: "`date`
 echo "------------------------------------------------"
-sleep 60s
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
-python3 training_main.py \
-    --n_ep_x_loop 5 \
-    --n_update_x_loop 5 \
-    --batch_s 1024 \
-    --discount 0.7 \
-    --training_loops 100
+python3 acting_experiments/acting_ablations.py
+
+echo "Done!"

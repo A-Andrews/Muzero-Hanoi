@@ -90,12 +90,12 @@ def save_results(env_name, command_line, tot_acc, muzero):
     # Store model
     model_dir = os.path.join(file_dir, "muzero_model.pt")
     torch.save(
-        {
-            "Muzero_net": muzero.networks.state_dict(),
-            "Net_optim": muzero.networks.optimiser.state_dict(),
-        },
-        model_dir,
-    )
+    {
+        "Muzero_net": muzero.networks._orig_mod.state_dict() if hasattr(muzero.networks, "_orig_mod") else muzero.networks.state_dict(),
+        "Net_optim": muzero.networks.optimiser.state_dict(),
+    },
+    model_dir,
+)
 
 if __name__ == "__main__":
     # Run the script
@@ -176,5 +176,5 @@ if __name__ == "__main__":
         n_update_x_loop=n_update_x_loop,
     )
 
-    tot_acc = muzero.training_loop(training_loops, min_replay_size, print_acc=10)
+    tot_acc = muzero.training_loop(training_loops, min_replay_size, print_acc=50)
     save_results(env_p, command_line, tot_acc, muzero)
