@@ -87,7 +87,7 @@ class MuZeroNet(nn.Module):
         )  # NOTE: Not sure why it doesn't predict rwd for initial inference
 
         pi_probs = pi_probs.squeeze(0).cpu().numpy()
-        value = value.squeeze(0).cpu().item()
+        value = value.squeeze(0).detach()
         rwd = rwd.squeeze(0).cpu().item()
         h_state = h_state.squeeze(0).cpu().numpy()
 
