@@ -149,10 +149,11 @@ class MCTS:
 
         if deterministic:
             # Choose the action with the most visit n.
-            action_idx = np.argmax(child_visits)
+            action_idx = torch.argmax(torch.as_tensor(child_visits, device=self.dev)).item()
         else:
             # Sample a action.
-            action_idx = np.random.choice(np.arange(pi_prob.shape[0]), p=pi_prob)
+            pi_prob_tensor = torch.as_tensor(pi_prob, device=self.dev, dtype=torch.float32)
+            action_idx = torch.multinomial(pi_prob_tensor, 1).item()
 
         action = root_node.children[action_idx].move
         if self.merge_tree:
@@ -210,15 +211,15 @@ class MCTS:
                 f"Expect `temperature` to be in the range [0.0, 1.0], got {temperature}"
             )
 
-        visits_count = np.asarray(visits_count, dtype=np.int64)
+        visits_count = torch.as_tensor(visits_count, dtype=torch.float32, device=self.dev)
 
         if temperature > 0.0:
             # limit the exponent in the range of [1.0, 5.0]
             # to avoid overflow when doing power operation over large numbers
             exp = max(1.0, min(5.0, 1.0 / temperature))
-            visits_count = np.power(visits_count, exp)
+            visits_count = visits_count.pow(exp)
 
-        return visits_count / np.sum(visits_count)
+        return visits_count / visits_count.sum()
 
     def merge_trees(self, old_root, new_root, bias=0.5):
         """Merge the new tree with the current tree.

@@ -299,28 +299,26 @@ class Muzero:
             np.random.randint(0, self.n_action)
         ] * self.unroll_n_steps  # select uniform random action for unroll_n_steps over the end
         episode_returns += [0] * self.unroll_n_steps
-        absorbing_policy = np.ones_like(episode_piProb[-1]) / len(episode_piProb[-1])
+        absorbing_policy = torch.ones_like(episode_piProb[-1]) / episode_piProb[-1].numel()
         episode_piProb += [absorbing_policy] * self.unroll_n_steps
 
         # Initialise variables for storage
-        rwds = np.zeros((n_states, self.unroll_n_steps), dtype=np.float32)
-        actions = np.zeros((n_states, self.unroll_n_steps), dtype=np.int64)
-        pi_probs = np.zeros(
-            (n_states, self.unroll_n_steps, len(episode_piProb[0])), dtype=np.float32
-        )
+        rwds = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.float32, device=self.dev)
+        actions = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.long, device=self.dev)
+        pi_probs = torch.zeros((n_states, self.unroll_n_steps, len(episode_piProb[0])), dtype=torch.float32, device=self.dev)   
         returns = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.float32, device=self.dev)
 
         for i in range(n_states):
-            rwds[i, :] = episode_rwd[i : i + self.unroll_n_steps]
-            actions[i, :] = episode_action[i : i + self.unroll_n_steps]
-            pi_probs[i, :, :] = episode_piProb[i : i + self.unroll_n_steps]
+            rwds[i, :] = torch.tensor(episode_rwd[i : i + self.unroll_n_steps], device=self.dev)
+            actions[i, :] = torch.tensor(episode_action[i : i + self.unroll_n_steps], device=self.dev)
+            pi_probs[i, :, :] = torch.stack([p.to(self.dev) for p in episode_piProb[i : i + self.unroll_n_steps]], dim=0)
             returns[i, :] = torch.tensor(episode_returns[i : i + self.unroll_n_steps], dtype=torch.float32, device=self.dev)
 
         # return np.array(episode_state), rwds, actions, pi_probs, returns
         device = self.dev
         states = torch.tensor(np.array(episode_state), dtype=torch.float32, device=device)
-        rwds = torch.tensor(rwds, dtype=torch.float32, device=device)
-        actions = torch.tensor(actions, dtype=torch.long, device=device)
-        pi_probs = torch.tensor(pi_probs, dtype=torch.float32, device=device)
-        returns = torch.tensor(returns, dtype=torch.float32, device=device)
+        # rwds = torch.tensor(rwds, dtype=torch.float32, device=device)
+        # actions = torch.tensor(actions, dtype=torch.long, device=device)
+        # pi_probs = torch.tensor(pi_probs, dtype=torch.float32, device=device)
+        # returns = torch.tensor(returns, dtype=torch.float32, device=device)
         return states, rwds, actions, pi_probs, returns
