@@ -180,15 +180,19 @@ class MCTS:
         Returns:
             action probabilities with added dirichlet noise.
         """
-        if not isinstance(prob, np.ndarray) or prob.dtype not in (
-            np.float32,
-            np.float64,
-        ):
-            raise ValueError(f"Expect `prob` to be a numpy.array, got {prob}")
+        # device = prob.device
+        # prob = prob.detach().cpu().numpy()
+        # if not isinstance(prob, np.ndarray) or prob.dtype not in (
+        #     np.float32,
+        #     np.float64,
+        # ):
+        #     raise ValueError(f"Expect `prob` to be a numpy.array, got {prob}")
 
-        alphas = np.ones_like(prob) * alpha
-        noise = np.random.dirichlet(alphas)
+        alphas = torch.full_like(prob, alpha, dtype=torch.float32, device=prob.device)
+        noise = torch.distributions.Dirichlet(alphas).sample()
         noised_prob = (1 - eps) * prob + eps * noise
+
+        # TODO noised_prob = torch.tensor(noised_prob, dtype=torch.float32, device=device)
 
         return noised_prob
 

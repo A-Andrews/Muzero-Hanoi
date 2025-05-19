@@ -86,8 +86,11 @@ class MuZeroNet(nn.Module):
             value
         )  # NOTE: Not sure why it doesn't predict rwd for initial inference
 
-        pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
-
+        # pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
+        pi_probs = pi_probs.squeeze(0)
+        value = value.squeeze(0)
+        rwd = rwd.squeeze(0)
+        h_state = h_state.squeeze(0)
         return h_state, rwd, pi_probs, value
 
     @torch.no_grad()
@@ -105,7 +108,11 @@ class MuZeroNet(nn.Module):
 
         pi_probs = F.softmax(pi_logits, dim=-1)  # NOTE: dim ?
 
-        pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
+        # pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
+        pi_probs = pi_probs.squeeze(0)
+        value = value.squeeze(0)
+        rwd = rwd.squeeze(0)
+        h_state = h_state.squeeze(0)
 
         return h_state, rwd, pi_probs, value
 

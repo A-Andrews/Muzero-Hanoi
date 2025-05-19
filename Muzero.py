@@ -191,9 +191,8 @@ class Muzero:
             episode_returns = compute_MCreturns(episode_rwd, self.discount)
 
         # Compute priorities for buffer
-        priorities = np.abs(
-            np.array(episode_returns, dtype=np.float32)
-            - np.array(episode_rootQ, dtype=np.float32)
+        priorities = torch.abs(
+            torch.tensor(episode_returns) - torch.tensor(episode_rootQ)
         )
 
         # Organise ep. trajectory into appropriate transitions for training - i.e. each transition should have unroll_n_steps associated transitions for training
@@ -309,12 +308,19 @@ class Muzero:
         pi_probs = np.zeros(
             (n_states, self.unroll_n_steps, len(episode_piProb[0])), dtype=np.float32
         )
-        returns = np.zeros((n_states, self.unroll_n_steps), dtype=np.float32)
+        returns = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.float32, device=self.dev)
 
         for i in range(n_states):
             rwds[i, :] = episode_rwd[i : i + self.unroll_n_steps]
             actions[i, :] = episode_action[i : i + self.unroll_n_steps]
             pi_probs[i, :, :] = episode_piProb[i : i + self.unroll_n_steps]
-            returns[i, :] = episode_returns[i : i + self.unroll_n_steps]
+            returns[i, :] = torch.tensor(episode_returns[i : i + self.unroll_n_steps], dtype=torch.float32, device=self.dev)
 
-        return np.array(episode_state), rwds, actions, pi_probs, returns
+        # return np.array(episode_state), rwds, actions, pi_probs, returns
+        device = self.dev
+        states = torch.tensor(np.array(episode_state), dtype=torch.float32, device=device)
+        rwds = torch.tensor(rwds, dtype=torch.float32, device=device)
+        actions = torch.tensor(actions, dtype=torch.long, device=device)
+        pi_probs = torch.tensor(pi_probs, dtype=torch.float32, device=device)
+        returns = torch.tensor(returns, dtype=torch.float32, device=device)
+        return states, rwds, actions, pi_probs, returns

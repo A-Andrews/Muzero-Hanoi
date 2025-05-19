@@ -16,13 +16,12 @@ class Buffer:
         self.d_state = d_state
         
         # Storage variables
-        self.states = np.zeros((size,d_state),dtype=np.float32) #NOTE: state is not unrolled, just need one initial state for each step
-        self.rwds = np.zeros((size,unroll_n_steps),dtype=np.float32)
-        self.actions = np.zeros((size, unroll_n_steps), dtype=np.int64) # store action indx
-        self.pi_probs = np.zeros((size, unroll_n_steps, n_action),dtype=np.float32)
-        self.mc_returns = np.zeros((size, unroll_n_steps),dtype=np.float32)
-
-        self.priorities = np.zeros((size,),dtype=np.float32)
+        self.states = torch.zeros((size, d_state), dtype=torch.float32, device=self.dev)
+        self.rwds = torch.zeros((size, unroll_n_steps), dtype=torch.float32, device=self.dev)
+        self.actions = torch.zeros((size, unroll_n_steps), dtype=torch.long, device=self.dev)
+        self.pi_probs = torch.zeros((size, unroll_n_steps, n_action), dtype=torch.float32, device=self.dev)
+        self.mc_returns = torch.zeros((size, unroll_n_steps), dtype=torch.float32, device=self.dev)
+        self.priorities = torch.zeros((size,), dtype=torch.float32, device=self.dev)
 
         # Other attributes
         self.ptr = 0 # counter for n. transitions currently inside buffer
@@ -65,7 +64,7 @@ class Buffer:
     def uniform_sample(self, batch_s):
         """ return a random batch of size batch_s for each data element"""
         num = len(self)
-        indx = np.random.choice(np.arange(num), size=batch_s, replace=True).astype(np.int64)
+        indx = torch.randint(0, num, (batch_s,), device=self.dev) # TODO is this the same
         states, rwds, actions, pi_probs, mc_returns = self._sample(indx)
 
         return states, rwds, actions, pi_probs, mc_returns
@@ -74,33 +73,42 @@ class Buffer:
         """ return a random batch of size batch_s for each data element"""
         num = len(self)
         priorities = self.priorities[:num]**self._priority_exponent # take priorities for all elements from buffer
-        priorities_probs = priorities / np.sum(priorities) # compute a probabilities based on priorities
+        priorities_probs = priorities / priorities.sum() # compute a probabilities based on priorities
 
-        indx = np.random.choice(np.arange(num), size=batch_s, replace=True, p=priorities_probs).astype(np.int64)
+        indx = torch.multinomial(priorities_probs, batch_s, replacement=True) # TODO np.random.choice(np.arange(num), size=batch_s, replace=True, p=priorities_probs).astype(np.int64)
         states, rwds, actions, pi_probs, mc_returns = self._sample(indx)
 
         #Compute importance weights to scale gradient of each element in the batch based on priority
         weights = ((1.0 / self.size) / priorities_probs[indx]) ** self._importance_sampling_exponent
-        weights /= np.max(weights)
+        weights /= weights.max() # normalise weights
 
-        weights = torch.from_numpy(weights).to(self.dev, dtype=torch.float32)
+        #TODO remove weights = torch.from_numpy(weights).to(self.dev, dtype=torch.float32)
 
         return states, rwds, actions, pi_probs, mc_returns, indx, weights
 
     def _sample(self, indx):
         #Sample transitions from buffer
-        states, rwds = torch.from_numpy(self.states[indx]).to(self.dev, dtype=torch.float32), torch.from_numpy(self.rwds[indx]).to(self.dev, dtype=torch.float32)
-        actions = torch.from_numpy(self.actions[indx]).to(self.dev, dtype=torch.long) 
-        pi_probs, mc_returns = torch.from_numpy(self.pi_probs[indx]).to(self.dev, dtype=torch.float32), torch.from_numpy(self.mc_returns[indx]).to(self.dev, dtype=torch.float32)
+        # TODO remove
+        # states, rwds = torch.from_numpy(self.states[indx]).to(self.dev, dtype=torch.float32), torch.from_numpy(self.rwds[indx]).to(self.dev, dtype=torch.float32)
+        # actions = torch.from_numpy(self.actions[indx]).to(self.dev, dtype=torch.long) 
+        # pi_probs, mc_returns = torch.from_numpy(self.pi_probs[indx]).to(self.dev, dtype=torch.float32), torch.from_numpy(self.mc_returns[indx]).to(self.dev, dtype=torch.float32)
 
-        return states, rwds, actions, pi_probs, mc_returns
+        # return states, rwds, actions, pi_probs, mc_returns
+        return (
+            self.states[indx],
+            self.rwds[indx],
+            self.actions[indx],
+            self.pi_probs[indx],
+            self.mc_returns[indx]
+        )
 
 
     def update_priorities(self, indx, new_priorities):
         """ Update priorities in the buffer, after the network has been update"""
         if indx is not None:
-            assert np.isfinite(new_priorities).all() and (new_priorities>0.0).any(), 'Priorities must be finite and positive.'
-            self.priorities[indx] = new_priorities
+            new_priorities = torch.tensor(new_priorities, device=self.dev, dtype=torch.float32)
+            assert torch.isfinite(new_priorities).all() and (new_priorities > 0.0).any(), 'Priorities must be finite and positive.'
+            self.priorities[indx] = new_priorities.to(self.dev)
 
     def __len__(self):
         return self.size if self.is_full else self.ptr

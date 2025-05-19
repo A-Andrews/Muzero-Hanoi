@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=gpu_short
-#SBATCH --job-name=muzero_hanoi_ablation_results
+#SBATCH --job-name=muzero_hanoi_plot_results
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -15,6 +15,7 @@ echo "Started at: "`date`
 echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
-python3 acting_experiments/acting_ablations.py --reset_latent_policy True
+
+python3 acting_experiments/results/plot_results.py
 
 echo "Done!"

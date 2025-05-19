@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import torch
 
 
 class Node:
@@ -103,6 +104,7 @@ class Node:
                 Q.append(min_max_stats.normalize(child.rwd + config.discount * child.Q))
             else:
                 Q.append(0)
+        Q = [q.detach().cpu().item() if isinstance(q, torch.Tensor) else q for q in Q]
         return np.array(Q, dtype=np.float32)
 
     def child_U(self, config):
@@ -123,6 +125,7 @@ class Node:
                 / (child.N + 1)
             )
             U.append(child.prior * w)
+        U = [u.detach().cpu().item() if isinstance(u, torch.Tensor) else u for u in U]
         return np.array(U, dtype=np.float32)
 
     @property
