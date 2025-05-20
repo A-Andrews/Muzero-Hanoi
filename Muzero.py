@@ -316,7 +316,8 @@ class Muzero:
 
         # TODO return np.array(episode_state), rwds, actions, pi_probs, returns
         device = self.dev
-        states = torch.tensor(np.array(episode_state), dtype=torch.float32, device=device)
+        states = torch.stack([torch.tensor(s, dtype=torch.float32, device=self.dev) for s in episode_state])
+        # states = torch.tensor(np.array(episode_state), dtype=torch.float32, device=device)
         # TODO rwds = torch.tensor(rwds, dtype=torch.float32, device=device)
         # actions = torch.tensor(actions, dtype=torch.long, device=device)
         # pi_probs = torch.tensor(pi_probs, dtype=torch.float32, device=device)
