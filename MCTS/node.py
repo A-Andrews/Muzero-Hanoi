@@ -87,7 +87,11 @@ class Node:
         # print('ucb: ',ucb_results)
 
         # Break ties when have multiple 'max' value.
-        a_indx = np.random.choice(np.where(ucb_results == ucb_results.max())[0])
+        # TODO a_indx = np.random.choice(np.where(ucb_results == ucb_results.max())[0])
+        max_mask = (ucb_results == ucb_results.max())
+        indices = torch.nonzero(max_mask, as_tuple=False).flatten()
+        rand_idx = torch.randint(0, indices.shape[0], (1,), device=ucb_results.device)
+        a_indx = indices[rand_idx].item()
 
         return self.children[a_indx]  # return best child
 
@@ -103,9 +107,9 @@ class Node:
             if child.N > 0:
                 Q.append(min_max_stats.normalize(child.rwd + config.discount * child.Q))
             else:
-                Q.append(0)
-        Q = [q.detach().cpu().item() if isinstance(q, torch.Tensor) else q for q in Q]
-        return np.array(Q, dtype=np.float32)
+                Q.append(0.0)
+        # TODO Q = [q.detach().cpu().item() if isinstance(q, torch.Tensor) else q for q in Q]
+        return torch.tensor(Q, dtype=torch.float32, device=config.dev)
 
     def child_U(self, config):
         """Returns a 1D numpy.array contains UCB score for all children (i.e., the exploration bonus).
@@ -125,8 +129,8 @@ class Node:
                 / (child.N + 1)
             )
             U.append(child.prior * w)
-        U = [u.detach().cpu().item() if isinstance(u, torch.Tensor) else u for u in U]
-        return np.array(U, dtype=np.float32)
+        # TODO U = [u.detach().cpu().item() if isinstance(u, torch.Tensor) else u for u in U]
+        return torch.tensor(U, dtype=torch.float32, device=config.dev)
 
     @property
     def Q(self):
