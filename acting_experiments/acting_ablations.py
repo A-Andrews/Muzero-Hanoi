@@ -38,6 +38,8 @@ def ablate_networks(reset_latent_policy, reset_latent_values, reset_latent_rwds,
     if reset_latent_rwds:
         networks.rwd_net.apply(networks.reset_param)
 
+    return networks
+
 ## ------ Define starting states for additional analysis ----
 def get_starting_state(env, start = None):
     if start is not None:
@@ -109,10 +111,10 @@ def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, t
                 # current state becomes next state
                 c_state = n_state
 
-            logging.info(step)
             errors.append(step - min_n_moves)
 
         data.append([n, sum(errors) / len(errors)])
+        logging.info([n, sum(errors) / len(errors)])
 
     logging.info(data)
     return data
@@ -327,6 +329,9 @@ if __name__ == "__main__":
     networks.load_state_dict(model_dict["Muzero_net"])
     networks.optimiser.load_state_dict(model_dict["Net_optim"])
 
+    networks = ablate_networks(
+        reset_latent_policy, reset_latent_values, reset_latent_rwds, networks
+    )
     data = get_results(
         env,
         start,

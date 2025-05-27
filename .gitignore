@@ -2,3 +2,6 @@
 __pycache__
 results
 logs
+img/ablation_comparison/*
+img/training_performance/*
+img/action_trees/*

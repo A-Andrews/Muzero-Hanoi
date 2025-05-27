@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import time
 
 import gym
 import numpy as np
@@ -11,6 +12,8 @@ from env.hanoi import TowersOfHanoi
 from Muzero import Muzero
 from utils import setup_logger
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import torch.profiler
+import matplotlib.pyplot as plt
 
 
 def get_env(env_name):
@@ -68,15 +71,47 @@ def log_command_line(env_p, training_loops, min_replay_size, lr, discount, n_mct
 
 # scheduler = ReduceLROnPlateau(muzero.networks.optimiser, patience=50, factor=0.5)
 
-## ======== Run training ==========
+def analyze_state_decisions(stats):
+    """Analyze the average decisions per state"""
+    avg_decisions = stats["avg_decisions_per_state"]
+    
+    logging.info(f"Number of unique states encountered: {len(avg_decisions)}")
+    logging.info(f"Average action across all states: {np.mean(list(avg_decisions.values())):.2f}")
+    logging.info(f"Action variance across states: {np.var(list(avg_decisions.values())):.2f}")
+    
+    # Find states with highest and lowest average actions
+    max_state = max(avg_decisions, key=avg_decisions.get)
+    min_state = min(avg_decisions, key=avg_decisions.get)
+    
+    logging.info(f"State with highest avg action: {avg_decisions[max_state]:.2f}")
+    logging.info(f"State with lowest avg action: {avg_decisions[min_state]:.2f}")
+    return avg_decisions
 
+def plot_action_distribution(stats, env_name, buffer_size, n_mcts_simulations, lr, unroll_n_steps, timestamp):
+    """Plot distribution of average actions per state"""
+    avg_decisions = list(stats["avg_decisions_per_state"].values())
+
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    file_dir = os.path.join(file_dir, "img", "training_performance", env_name)
+    os.makedirs(file_dir, exist_ok=True)
+    
+    plt.figure(figsize=(10, 6))
+    plt.hist(avg_decisions, bins=20, alpha=0.7)
+    plt.xlabel("Average Action")
+    plt.ylabel("Number of States")
+    plt.title("Distribution of Average Actions per State")
+    plt.grid(True)
+    plot_path = os.path.join(file_dir,f"action_distribution_buff-{buffer_size}_mctss-{n_mcts_simulations}_lr-{lr}_unroll-{unroll_n_steps}_{timestamp}.png")
+    plt.savefig(plot_path)
+    plt.close()
+    logging.info(f"Action distribution plot saved to {plot_path}")
 
 ## ===== Save results =========
-def save_results(env_name, command_line, tot_acc, muzero):
+def save_results(env_name, command_line, stats, muzero, timestamp):
     file_indx = 1
     # Create directory to store results
     file_dir = os.path.dirname(os.path.abspath(__file__))
-    file_dir = os.path.join(file_dir, "results", env_name, str(file_indx))
+    file_dir = os.path.join(file_dir, "stats", env_name)
 
     # Create directory if it did't exist before
     os.makedirs(file_dir, exist_ok=True)
@@ -84,31 +119,93 @@ def save_results(env_name, command_line, tot_acc, muzero):
     # Store command line
     with open(os.path.join(file_dir, "commands.txt"), "w") as f:
         f.write(command_line)
-    # Store accuracy
-    acc_dir = os.path.join(file_dir, "training_accuracy.pt")
-    torch.save(torch.tensor(tot_acc), acc_dir)
+
+    dict_keys = ["state_action_history", "avg_decisions_per_state"]
+
+    # Save all stats
+    for key, value in stats.items():
+        if key in dict_keys:
+            # Save dictionaries directly without converting to tensor
+            torch.save(value, os.path.join(file_dir, f"{key}-{timestamp}.pt"))
+        else:
+            # Convert other values to tensors
+            torch.save(torch.tensor(value), os.path.join(file_dir, f"{key}-{timestamp}.pt"))
+        
     # Store model
     model_dir = os.path.join(file_dir, "muzero_model.pt")
     torch.save(
-    {
-        "Muzero_net": muzero.networks._orig_mod.state_dict() if hasattr(muzero.networks, "_orig_mod") else muzero.networks.state_dict(),
-        "Net_optim": muzero.networks.optimiser.state_dict(),
-    },
-    model_dir,
-)
+        {
+            "Muzero_net": muzero.networks._orig_mod.state_dict() if hasattr(muzero.networks, "_orig_mod") else muzero.networks.state_dict(),
+            "Net_optim": muzero.networks.optimiser.state_dict(),
+        },
+        model_dir,
+    )
+    logging.info(f"Model saved to {model_dir}")
+    
+## ===== Plot results ========
+def plot_results(stats, env_name, buffer_size, n_mcts_simulations, lr, unroll_n_steps, timestamp):
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    file_dir = os.path.join(file_dir, "img", "training_performance", env_name)
+    os.makedirs(file_dir, exist_ok=True)
+
+    for k, v in stats.items():
+        if torch.is_tensor(v):
+            stats[k] = v.detach().cpu().numpy()
+        elif isinstance(v, list) and len(v) > 0:
+            stats[k] = [x.detach().cpu().numpy() if torch.is_tensor(x) else x for x in v]
+
+    plt.figure(figsize=(15, 10))
+    plt.subplot(2, 3, 1)
+    plt.plot(stats["tot_accuracy"], marker='o')
+    plt.title("Mean Accuracy")
+    plt.xlabel("Training Loop")
+    plt.ylabel("Accuracy")
+
+    plt.subplot(2, 3, 2)
+    plt.plot(stats["all_value_loss"], label="Value Loss")
+    plt.title("Value Loss")
+    plt.xlabel("Update Step")
+    plt.ylabel("Loss")
+
+    plt.subplot(2, 3, 3)
+    plt.plot(stats["all_rwd_loss"], label="Reward Loss", color='orange')
+    plt.title("Reward Loss")
+    plt.xlabel("Update Step")
+    plt.ylabel("Loss")
+
+    plt.subplot(2, 3, 4)
+    plt.plot(stats["all_pi_loss"], label="Policy Loss", color='green')
+    plt.title("Policy Loss")
+    plt.xlabel("Update Step")
+    plt.ylabel("Loss")
+
+    plt.subplot(2, 3, 5)
+    plt.plot(stats["cumulative_success"], label="Cumulative Success", color='purple')
+    plt.title("Cumulative Success")
+    plt.xlabel("Training Loop")
+    plt.ylabel("Total Successes")
+
+    # plt.subplot(2, 4, 8)
+    # plt.plot(stats["q_values_per_loop"], label="Mean Q Value", color='magenta')
+    # plt.title("Mean Q Value per Loop")
+    # plt.xlabel("Training Loop")
+    # plt.ylabel("Q Value")
+
+    plt.subplot(2, 3, 6)
+    plt.plot(stats["grad_norms"], label="Gradient Norm", color='brown')
+    plt.title("Gradient Norm Over Time")
+    plt.xlabel("Update Step")
+    plt.ylabel("L2 Norm")
+
+    plt.tight_layout()
+    plt.suptitle(f"{env_name} Buffer: {buffer_size} Number of simulations: {n_mcts_simulations} Learning rate: {lr} Unroll steps: {unroll_n_steps}", fontsize=30)
+    plot_path = os.path.join(file_dir, f"training_stats_buff-{buffer_size}_mctss-{n_mcts_simulations}_lr-{lr}_unroll-{unroll_n_steps}_{timestamp}.png")
+    plt.savefig(plot_path)
+    plt.close()
+    logging.info(f"Training stats plot saved to {plot_path}")
+    # TODO save all variables in plot postscript?
 
 if __name__ == "__main__":
-    # Run the script
-    # training_loops = 50 #0000
-    # min_replay_size = 5000
-    # dirichlet_alpha = 0.25
-    # n_ep_x_loop = 1 # 20
-    # n_update_x_loop = 1 # 20
-    # unroll_n_steps = 5
-    # TD_return = True
-    # n_TD_step = 10
-    # buffer_size = 50000  # int(1e6)
-    # priority_replay = True
     parser = argparse.ArgumentParser(description='Muzero Training')
     parser.add_argument('--env', type=str, default='Hanoi', help='Environment to train on (h for Hanoi, c for CartPole)')
     parser.add_argument('--training_loops', type=int, default=50, help='Number of training loops')
@@ -126,6 +223,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_mcts_simulations', type=int, default=5, help='Number of MCTS simulations')
     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate')
     parser.add_argument('--seed', type=int, default=1, help='Random seed for reproducibility')
+    parser.add_argument('--profile', type=bool, default=False, help='Enable profiling')
     args = parser.parse_args()
     env_p = args.env
     training_loops = args.training_loops
@@ -176,5 +274,28 @@ if __name__ == "__main__":
         n_update_x_loop=n_update_x_loop,
     )
 
-    tot_acc = muzero.training_loop(training_loops, min_replay_size, print_acc=50)
-    save_results(env_p, command_line, tot_acc, muzero)
+    if not args.profile:
+        stats = muzero.training_loop(training_loops, min_replay_size, print_acc=50)
+        timestamp = int(time.time())
+        save_results(env_p, command_line, stats, muzero, timestamp)
+        plot_results(stats, env_p, buffer_size, n_mcts_simulations, lr, unroll_n_steps, timestamp)
+
+        analyze_state_decisions(stats)
+        plot_action_distribution(stats, env_p, buffer_size, n_mcts_simulations, lr, unroll_n_steps, timestamp)
+
+    else:
+        with torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('./log'),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as prof:
+            muzero.training_loop(training_loops, min_replay_size, print_acc=50, profiler=prof)
+            logging.info(prof.key_averages().table(sort_by="cuda_time_taken", row_limit=10))
+
+            

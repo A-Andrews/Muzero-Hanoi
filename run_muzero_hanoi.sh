@@ -21,4 +21,6 @@ python3 training_main.py \
     --n_update_x_loop 5 \
     --batch_s 1024 \
     --discount 0.7 \
-    --training_loops 100
+    --training_loops 60
+
+echo "Done!"

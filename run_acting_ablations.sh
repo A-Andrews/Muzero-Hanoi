@@ -15,6 +15,6 @@ echo "Started at: "`date`
 echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
-python3 acting_experiments/acting_ablations.py --reset_latent_values True --reset_latent_rwds True
+python3 acting_experiments/acting_ablations.py --reset_latent_rwds True
 
 echo "Done!"

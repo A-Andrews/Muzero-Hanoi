@@ -1,4 +1,5 @@
 import os
+import time
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -65,7 +66,7 @@ for d in directories:
     i = 0
     for r in results:
         axs[e, i].plot(r[:, 0], r[:, 1])
-        # axs[e,i].set_ylim([0, 70])
+        axs[e, i].set_ylim([0, 70])
         axs[e, i].spines["right"].set_visible(False)
         axs[e, i].spines["top"].set_visible(False)
         if i == 0:
@@ -77,4 +78,4 @@ for d in directories:
         i += 1
     e += 1
 plt.show()
-# plt.savefig('/Users/px19783/Desktop/CerebLatentPlanning_StartingStates_accuracies', format='png', dpi=1200)
+plt.savefig(f'/well/costa/users/zqa082/Muzero-Hanoi/img/ablation_comparison/MuZero_Ablation_Comparison_{int(time.time())}.png', format='png', dpi=1200)
