@@ -354,5 +354,6 @@ if __name__ == "__main__":
         reset_latent_values,
         reset_latent_rwds,
         save_results,
+        timestamp
     )
     logging.info("Results saved")

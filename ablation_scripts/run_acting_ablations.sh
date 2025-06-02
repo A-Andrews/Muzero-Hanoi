@@ -1,11 +1,10 @@
 #!/bin/bash
-#SBATCH --partition=gpu_short
+#SBATCH --partition=short
 #SBATCH --job-name=muzero_hanoi_ablation_results
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
 
 echo "------------------------------------------------"
 echo "Run on host: "`hostname`
