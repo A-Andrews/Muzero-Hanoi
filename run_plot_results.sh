@@ -15,6 +15,6 @@ echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
 
-python3 acting_experiments/results/plot_startingState_results.py
+python3 acting_experiments/results/plot_startingState_results.py "$@"
 
 echo "Done!"

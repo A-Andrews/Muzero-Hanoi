@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 
@@ -6,14 +7,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+parser = argparse.ArgumentParser(description='Plotting Results')
+parser.add_argument('--timestamp', type=str, default=None, help='Timestamp for the results directory')
+
+args = parser.parse_args()
+timestamp = args.timestamp
+
 ## Plot performance for tower of hanoi starting from pre-determined states at a fixed distance from the target
 # e.g., ES: far from goal, MS: moderate, LS: close to goal.
 ## Load data
 
 # Create directory to store results
-root_dir = os.path.dirname(os.path.abspath(__file__))
-seed_indx = 1
-root_dir = os.path.join(root_dir, str(seed_indx))
+root_dir = os.path.join("stats", "Hanoi", timestamp)
 
 dir_1 = "ES"
 dir_2 = "MS"
@@ -77,5 +82,32 @@ for d in directories:
             axs[e, i].set_xlabel("N. simulations every real step \n (planning time)")
         i += 1
     e += 1
+
+row_labels = ["Far from goal", "Mid-distance", "Close to goal"]
+
+for i, label in enumerate(row_labels):
+    if i < len(directories):
+        # Get the position of the first subplot in this row
+        pos = axs[i, 0].get_position()
+        # Add text to the left of the row
+        fig.text(
+            pos.x0 - 0.1,              # x position (left of the subplot)
+            pos.y0 + pos.height/2,     # y position (center of subplot)
+            label,                     # Label text
+            va='center',               # Vertical alignment
+            ha='right',                # Horizontal alignment
+            fontsize=12,               # Font size
+            fontweight='bold'          # Make it bold
+        )
+
+# row_labels = ["Early state", "Middle state", "Late state"]
+# # left margin in figure coords
+# x_pos = 6 
+
+# for i, label in enumerate(row_labels):
+#     # y: center of row i in figure coords.
+#     y_pos = 1 - (i + 0.5) / 3  
+#     plt.text(x_pos, y_pos, label, va="center", ha="left", fontsize=12)
+
 plt.show()
-plt.savefig(f'/well/costa/users/zqa082/Muzero-Hanoi/img/ablation_comparison/MuZero_Ablation_Comparison_{int(time.time())}.png', format='png', dpi=1200)
+plt.savefig(os.path.join(root_dir, f"MuZero_Ablation_Comparison_{int(time.time())}.png"), format='png', dpi=1200)

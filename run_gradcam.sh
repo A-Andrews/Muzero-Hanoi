@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --partition=gpu_long
-#SBATCH --job-name=muzero_hanoi
+#SBATCH --partition=gpu_short
+#SBATCH --job-name=gradcam_analysis
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -13,10 +13,13 @@ echo "Operating system: "`uname -s`
 echo "Username: "`whoami`
 echo "Started at: "`date`
 echo "------------------------------------------------"
-sleep 60s
 module load Python/3.11.3-GCCcore-12.3.0
-source ".venv/bin/activate"
-python3 training_main.py \
-    --batch_s 1024
+source .venv/bin/activate
 
-echo "Done!"
+# Run Grad-CAM analysis
+python3 gradcam_analysis.py \
+    --model_path "results/Hanoi/1/muzero_model.pt" \
+    --save_dir "gradcam_results" \
+    --layer "representation_net.0"
+
+echo "Grad-CAM analysis completed!"

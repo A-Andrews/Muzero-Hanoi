@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --partition=gpu_long
-#SBATCH --job-name=muzero_hanoi
+#SBATCH --partition=gpu_short
+#SBATCH --job-name=muzero_profiler
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -17,6 +17,10 @@ sleep 60s
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
 python3 training_main.py \
-    --batch_s 1024
-
-echo "Done!"
+    --n_ep_x_loop 5 \
+    --n_update_x_loop 5 \
+    --batch_s 64 \
+    --discount 0.7 \
+    --training_loops 10 \
+    --profile True \
+    --buffer_size 10000

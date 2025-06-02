@@ -111,7 +111,8 @@ def save_results(env_name, command_line, stats, muzero, timestamp):
     file_indx = 1
     # Create directory to store results
     file_dir = os.path.dirname(os.path.abspath(__file__))
-    file_dir = os.path.join(file_dir, "stats", env_name)
+    file_dir = os.path.join(file_dir, "stats", env_name, str(timestamp))
+    
 
     # Create directory if it did't exist before
     os.makedirs(file_dir, exist_ok=True)
@@ -130,9 +131,9 @@ def save_results(env_name, command_line, stats, muzero, timestamp):
         else:
             # Convert other values to tensors
             torch.save(torch.tensor(value), os.path.join(file_dir, f"{key}-{timestamp}.pt"))
-        
-    # Store model
+            
     model_dir = os.path.join(file_dir, "muzero_model.pt")
+    # Store model
     torch.save(
         {
             "Muzero_net": muzero.networks._orig_mod.state_dict() if hasattr(muzero.networks, "_orig_mod") else muzero.networks.state_dict(),
@@ -145,7 +146,7 @@ def save_results(env_name, command_line, stats, muzero, timestamp):
 ## ===== Plot results ========
 def plot_results(stats, env_name, buffer_size, n_mcts_simulations, lr, unroll_n_steps, timestamp):
     file_dir = os.path.dirname(os.path.abspath(__file__))
-    file_dir = os.path.join(file_dir, "img", "training_performance", env_name)
+    file_dir = os.path.join(file_dir, "stats", env_name, str(timestamp))
     os.makedirs(file_dir, exist_ok=True)
 
     for k, v in stats.items():
@@ -208,7 +209,7 @@ def plot_results(stats, env_name, buffer_size, n_mcts_simulations, lr, unroll_n_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Muzero Training')
     parser.add_argument('--env', type=str, default='Hanoi', help='Environment to train on (h for Hanoi, c for CartPole)')
-    parser.add_argument('--training_loops', type=int, default=50, help='Number of training loops')
+    parser.add_argument('--training_loops', type=int, default=5000, help='Number of training loops')
     parser.add_argument('--min_replay_size', type=int, default=5000, help='Minimum replay size')
     parser.add_argument('--dirichlet_alpha', type=float, default=0.25, help='Dirichlet alpha for exploration')
     parser.add_argument('--n_ep_x_loop', type=int, default=1, help='Number of episodes per loop')
@@ -218,10 +219,10 @@ if __name__ == "__main__":
     parser.add_argument('--n_TD_step', type=int, default=10, help='Number of TD steps')
     parser.add_argument('--buffer_size', type=int, default=50000, help='Buffer size')
     parser.add_argument('--priority_replay', type=bool, default=True, help='Use priority replay')
-    parser.add_argument('--batch_s', type=int, default=512, help='Batch size')
-    parser.add_argument('--discount', type=float, default=0.8, help='Discount factor')
-    parser.add_argument('--n_mcts_simulations', type=int, default=5, help='Number of MCTS simulations')
-    parser.add_argument('--lr', type=float, default=0.002, help='Learning rate')
+    parser.add_argument('--batch_s', type=int, default=256, help='Batch size')
+    parser.add_argument('--discount', type=float, default=0.997, help='Discount factor')
+    parser.add_argument('--n_mcts_simulations', type=int, default=50, help='Number of MCTS simulations')
+    parser.add_argument('--lr', type=float, default=0.005, help='Learning rate')
     parser.add_argument('--seed', type=int, default=1, help='Random seed for reproducibility')
     parser.add_argument('--profile', type=bool, default=False, help='Enable profiling')
     args = parser.parse_args()

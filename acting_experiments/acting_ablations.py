@@ -63,6 +63,7 @@ def get_starting_state(env, start = None):
     return file_indx
 
 ## ======== Run acting ==========
+@torch.no_grad()
 def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, temperature):
     data = []
     for n in n_mcts_simulations_range:
@@ -85,7 +86,7 @@ def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, t
 
             # Compute min n. moves from current random state
             min_n_moves = hanoi_solver(
-                env.current_state()
+                tuple(env.current_state())
             )  # pass state represt not in one-hot form
 
             done = False
@@ -114,16 +115,15 @@ def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, t
             errors.append(step - min_n_moves)
 
         data.append([n, sum(errors) / len(errors)])
-        logging.info([n, sum(errors) / len(errors)])
 
     logging.info(data)
     return data
 
 ## ===== Save results =========
-def save_results_to_file(seed, file_indx, command_line, data, reset_latent_policy, reset_latent_values, reset_latent_rwds, save_results):
+def save_results_to_file(seed, file_indx, command_line, data, reset_latent_policy, reset_latent_values, reset_latent_rwds, save_results, timestamp):
     # Create directory to store results
-    file_dir = os.path.dirname(os.path.abspath(__file__))
-    file_dir = os.path.join(file_dir, "results", str(seed), str(file_indx))
+    file_dir = os.path.join("stats", "Hanoi", timestamp)
+    file_dir = os.path.join(file_dir, str(seed), str(file_indx))
     # Create directory if it did't exist before
     os.makedirs(file_dir, exist_ok=True)
 
@@ -280,6 +280,7 @@ if __name__ == "__main__":
         default=None,
         help="Starting state index (default: None)",
     )
+    parser.add_argument("--timestamp", type=str, default=None, help="Timestamp for results")
     args = parser.parse_args()
     seed = args.seed
     env_name = args.env_name
@@ -299,6 +300,7 @@ if __name__ == "__main__":
     TD_return = args.TD_return
     n_action = args.n_action
     start = args.start
+    timestamp = args.timestamp
 
     env = TowersOfHanoi(N=N, max_steps=max_steps)
     s_space_size = env.oneH_s_size
@@ -323,8 +325,9 @@ if __name__ == "__main__":
     networks = MuZeroNet(
         rpr_input_s=s_space_size, action_s=n_action, lr=lr, TD_return=TD_return, device=dev
     ).to(dev)
+    model_path = os.path.join("stats", "Hanoi", timestamp, "muzero_model.pt")
     model_dict = torch.load(
-        f"results/Hanoi/{model_run_n}/muzero_model.pt"
+        model_path, map_location=dev
     )
     networks.load_state_dict(model_dict["Muzero_net"])
     networks.optimiser.load_state_dict(model_dict["Net_optim"])
