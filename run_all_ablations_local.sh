@@ -22,7 +22,7 @@ python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_rwds Tru
 python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_rwds True "$@"
 python3 acting_experiments/acting_ablations.py --start 2 --reset_latent_rwds True "$@"
 
-echo "Running ablations to value and reward""$@"
+echo "Running ablations to value and reward"
 python3 acting_experiments/acting_ablations.py --reset_latent_values True --reset_latent_rwds True "$@"
 python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_values True --reset_latent_rwds True "$@"
 python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_values True --reset_latent_rwds True "$@"
