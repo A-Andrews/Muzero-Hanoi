@@ -109,5 +109,5 @@ for i, label in enumerate(row_labels):
 #     y_pos = 1 - (i + 0.5) / 3  
 #     plt.text(x_pos, y_pos, label, va="center", ha="left", fontsize=12)
 
-plt.show()
+# plt.show()
 plt.savefig(os.path.join(root_dir, f"MuZero_Ablation_Comparison_{int(time.time())}.png"), format='png', dpi=1200)

@@ -123,7 +123,7 @@ def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, t
 def save_results_to_file(seed, file_indx, command_line, data, reset_latent_policy, reset_latent_values, reset_latent_rwds, save_results, timestamp):
     # Create directory to store results
     file_dir = os.path.join("stats", "Hanoi", timestamp)
-    file_dir = os.path.join(file_dir, str(seed), str(file_indx))
+    file_dir = os.path.join(file_dir, str(file_indx))
     # Create directory if it did't exist before
     os.makedirs(file_dir, exist_ok=True)
 

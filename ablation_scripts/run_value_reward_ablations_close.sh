@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=short
-#SBATCH --job-name=muzero_hanoi_rwd_ablations_close
+#SBATCH --job-name=muzero_hanoi_val_rwd_ablations_close
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1

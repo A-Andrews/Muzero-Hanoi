@@ -15,6 +15,6 @@ echo "------------------------------------------------"
 sleep 60s
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
-python3 training_main.py --discount 0.08
+python3 training_main.py "$@"
 
 echo "Done!"
