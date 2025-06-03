@@ -91,9 +91,11 @@ def log_command_line(
     TD_return,
     priority_replay,
     dev,
+    dirichlet_alpha,
     n_disks=None,
 ):
-    command_line = f"Env: {env_p}, Training Loops: {training_loops}, Min replay size: {min_replay_size}, lr: {lr}, discount: {discount}, n. MCTS: {n_mcts_simulations}, batch size: {batch_s}, TD_return: {TD_return}, Priority Buff: {priority_replay}, device: {dev}"
+    command_line = f"Env: {env_p}, Training Loops: {training_loops}, Min replay size: {min_replay_size}, lr: {lr}, discount: {discount}, n. MCTS: {n_mcts_simulations}, batch size: {batch_s}, TD_return: {TD_return}, Priority Buff: {priority_replay}, device: {dev}, dirichlet_alpha: {dirichlet_alpha}"
+
     if env_p == "Hanoi":  # if hanoi also print n. of disks
         command_line += f", N. disks: {n_disks}"
     logging.info(command_line)
@@ -194,6 +196,7 @@ if __name__ == "__main__":
         TD_return,
         priority_replay,
         dev,
+        dirichlet_alpha=dirichlet_alpha,
         n_disks=n_disks,
     )
 
