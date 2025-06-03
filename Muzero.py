@@ -8,7 +8,7 @@ from buffer import Buffer
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
 from utils import adjust_temperature, compute_MCreturns, compute_n_step_returns
-from torch.cuda.amp import autocast, GradScaler
+
 
 class Muzero:
 
@@ -68,8 +68,6 @@ class Muzero:
             device=self.dev,
         ).to(self.dev)
 
-        self.networks = torch.compile(self.networks, mode="reduce-overhead")
-
         ## ========== Initialise buffer ========
         self.buffer = Buffer(
             buffer_size,
@@ -80,51 +78,28 @@ class Muzero:
         )
         self.priority_replay = priority_replay
 
-    def training_loop(self, n_loops, min_replay_size, print_acc=5, profiler=None):
+    def training_loop(self, n_loops, min_replay_size, print_acc=50):
 
         logging.info("Training started \n")
 
         accuracy = []  # in terms of mean n. steps to solve task
         tot_accuracy = []
         value_loss, rwd_loss, pi_loss = [], [], []
-        cumulative_success = []
-        total_success = 0
-        q_values_per_loop = []
-        grad_norms = []
-
-        all_value_loss, all_rwd_loss, all_pi_loss = [], [], []
-
-        state_action_history = {}
 
         for n in range(1, n_loops):
             ep_accuracy = []
-            successes = 0
-            q_values_this_loop = []
             for ep in range(self.n_ep_x_loop):
                 # Play one episode
-                steps, states, rwds, actions, pi_probs, returns, priorities, state_action_pairs = (
+                steps, states, rwds, actions, pi_probs, returns, priorities = (
                     self._play_game(episode=n * self.n_ep_x_loop, deterministic=False)
                 )
-
-                for state_key, action in state_action_pairs:
-                    if state_key not in state_action_history:
-                        state_action_history[state_key] = []
-                    state_action_history[state_key].append(action)
-
-                # q_values_this_loop.append(mean_q_value)
                 ep_accuracy.append(steps)
                 # Store episode in buffer only if successful
                 if returns[-1, 0] > 0:
-                    successes += 1
                     self.buffer.add(
                         states, rwds, actions, pi_probs, returns, priorities
                     )
             accuracy.append(sum(ep_accuracy) / self.n_ep_x_loop)
-            total_success += successes
-            cumulative_success.append(total_success)
-
-            # mean_q_value_loop = float(np.mean(q_values_this_loop)) if q_values_this_loop else 0.0
-            # q_values_per_loop.append(mean_q_value_loop)
 
             # If time to train, train MuZero network
             if self.buffer.__len__() > min_replay_size:
@@ -146,12 +121,11 @@ class Muzero:
                         priority_w, priority_indx = None, None
 
                     # Update network
-                    new_priority_w, v_loss, r_loss, p_loss, grad_norm = self._update(
+                    new_priority_w, v_loss, r_loss, p_loss = self._update(
                         states, rwds, actions, pi_probs, returns, priority_w
                     )
                     # Update buffer priorities
                     self.buffer.update_priorities(priority_indx, new_priority_w)
-                    grad_norms.append(grad_norm)
 
                 value_loss.append(v_loss)
                 rwd_loss.append(r_loss)
@@ -159,38 +133,16 @@ class Muzero:
 
             if n * self.n_ep_x_loop % print_acc == 0:
                 mean_acc = sum(accuracy) / print_acc
-                mean_v_loss = sum(value_loss)/print_acc
-                mean_r_loss = sum(rwd_loss)/print_acc
-                mean_p_loss = sum(pi_loss)/print_acc
                 logging.info(f"| Training Loop: {n} ")
                 logging.info(f"Number of steps:  {mean_acc}")
-                logging.info(f"V loss:  {mean_v_loss}")
-                logging.info(f"rwd loss:  {mean_r_loss}")
-                logging.info(f"Pi loss:  {mean_p_loss} \n")
+                logging.info(f"V loss:  {sum(value_loss)/print_acc}")
+                logging.info(f"rwd loss:  {sum(rwd_loss)/print_acc}")
+                logging.info(f"Pi loss:  {sum(pi_loss)/print_acc} \n")
                 tot_accuracy.append(mean_acc)
-                all_value_loss.append(mean_v_loss)
-                all_rwd_loss.append(mean_r_loss)
-                all_pi_loss.append(mean_p_loss)
                 accuracy = []
                 value_loss, rwd_loss, pi_loss = [], [], []
-            if profiler is not None:
-                profiler.step()
 
-        # Compute average decisions per state
-        avg_decisions_per_state = {}
-        for state_key, actions in state_action_history.items():
-            avg_decisions_per_state[state_key] = np.mean(actions)
-
-        return {
-            "tot_accuracy": tot_accuracy,
-            "all_value_loss": all_value_loss,
-            "all_rwd_loss": all_rwd_loss,
-            "all_pi_loss": all_pi_loss,
-            "cumulative_success": cumulative_success,
-            "grad_norms": grad_norms,
-            "state_action_history": state_action_history,
-            "avg_decisions_per_state": avg_decisions_per_state,
-        }
+        return tot_accuracy
 
     def _play_game(self, episode, deterministic=False):
 
@@ -205,11 +157,6 @@ class Muzero:
         done = False
         step = 0
 
-        sim_counts = []
-        avg_visit_counts = []
-
-        state_action_pairs = []
-
         while not done:
             # Run MCTS to select the action
             action, pi_prob, rootNode_Q = self.mcts.run_mcts(
@@ -218,10 +165,6 @@ class Muzero:
                 temperature=adjust_temperature(episode),
                 deterministic=deterministic,
             )
-
-            state_key = self._state_to_key(c_state)
-            state_action_pairs.append((state_key, action))
-
             # Take a step in env based on MCTS action
             n_state, rwd, done, _ = self.env.step(action)
             step += 1
@@ -237,8 +180,6 @@ class Muzero:
             # current state becomes next state
             c_state = n_state
 
-        # TODO return this mean_q_value = float(mean(episode_rootQ)) if episode_rootQ else 0.0
-
         # Compute appropriate returns for each state
         if self.TD_return:
             episode_returns = compute_n_step_returns(
@@ -248,8 +189,9 @@ class Muzero:
             episode_returns = compute_MCreturns(episode_rwd, self.discount)
 
         # Compute priorities for buffer
-        priorities = torch.abs(
-            torch.tensor(episode_returns) - torch.tensor(episode_rootQ)
+        priorities = np.abs(
+            np.array(episode_returns, dtype=np.float32)
+            - np.array(episode_rootQ, dtype=np.float32)
         )
 
         # Organise ep. trajectory into appropriate transitions for training - i.e. each transition should have unroll_n_steps associated transitions for training
@@ -257,16 +199,7 @@ class Muzero:
             episode_state, episode_rwd, episode_action, episode_piProb, episode_returns
         )
 
-        return step, states, rwds, actions, pi_probs, returns, priorities, state_action_pairs
-
-    def _state_to_key(self, state):
-        """Convert state to a hashable key for tracking"""
-        if isinstance(state, torch.Tensor):
-            return tuple(state.cpu().numpy().flatten())
-        elif isinstance(state, np.ndarray):
-            return tuple(state.flatten())
-        else:
-            return str(state)
+        return step, states, rwds, actions, pi_probs, returns, priorities
 
     def _update(self, states, rwds, actions, pi_probs, returns, priority_w):
         # TRIAL: expands all states (including final ones) of mcts_steps for simplicty for steps after terminal just map everything to zero
@@ -320,7 +253,6 @@ class Muzero:
                 new_priorities = (
                     (tot_pred_values[:, 0] - returns[:, 0]).abs().cpu().numpy()
                 )
-                # TODO fix cpu
 
         loss = loss.mean()
         # Scale the loss by 1/unroll_steps.
@@ -329,21 +261,11 @@ class Muzero:
         # Update network
         self.networks.update(loss)
 
-        # ---- Compute gradient norm ----
-        total_norm = 0.0
-        for p in self.networks.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        grad_norm = total_norm ** 0.5
-        # --------------------------------
-
         return (
             new_priorities,
             value_loss.mean().detach(),
             rwd_loss.mean().detach(),
             policy_loss.mean().detach(),
-            grad_norm
         )
 
     def organise_transitions(
@@ -376,27 +298,21 @@ class Muzero:
             np.random.randint(0, self.n_action)
         ] * self.unroll_n_steps  # select uniform random action for unroll_n_steps over the end
         episode_returns += [0] * self.unroll_n_steps
-        absorbing_policy = torch.ones_like(episode_piProb[-1]) / episode_piProb[-1].numel()
+        absorbing_policy = np.ones_like(episode_piProb[-1]) / len(episode_piProb[-1])
         episode_piProb += [absorbing_policy] * self.unroll_n_steps
 
         # Initialise variables for storage
-        rwds = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.float32, device=self.dev)
-        actions = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.long, device=self.dev)
-        pi_probs = torch.zeros((n_states, self.unroll_n_steps, len(episode_piProb[0])), dtype=torch.float32, device=self.dev)   
-        returns = torch.zeros((n_states, self.unroll_n_steps), dtype=torch.float32, device=self.dev)
+        rwds = np.zeros((n_states, self.unroll_n_steps), dtype=np.float32)
+        actions = np.zeros((n_states, self.unroll_n_steps), dtype=np.int64)
+        pi_probs = np.zeros(
+            (n_states, self.unroll_n_steps, len(episode_piProb[0])), dtype=np.float32
+        )
+        returns = np.zeros((n_states, self.unroll_n_steps), dtype=np.float32)
 
         for i in range(n_states):
-            rwds[i, :] = torch.tensor(episode_rwd[i : i + self.unroll_n_steps], device=self.dev)
-            actions[i, :] = torch.tensor(episode_action[i : i + self.unroll_n_steps], device=self.dev)
-            pi_probs[i, :, :] = torch.stack([p.to(self.dev) for p in episode_piProb[i : i + self.unroll_n_steps]], dim=0)
-            returns[i, :] = torch.tensor(episode_returns[i : i + self.unroll_n_steps], dtype=torch.float32, device=self.dev)
+            rwds[i, :] = episode_rwd[i : i + self.unroll_n_steps]
+            actions[i, :] = episode_action[i : i + self.unroll_n_steps]
+            pi_probs[i, :, :] = episode_piProb[i : i + self.unroll_n_steps]
+            returns[i, :] = episode_returns[i : i + self.unroll_n_steps]
 
-        # TODO return np.array(episode_state), rwds, actions, pi_probs, returns
-        device = self.dev
-        states = torch.stack([torch.tensor(s, dtype=torch.float32, device=self.dev) for s in episode_state])
-        # states = torch.tensor(np.array(episode_state), dtype=torch.float32, device=device)
-        # TODO rwds = torch.tensor(rwds, dtype=torch.float32, device=device)
-        # actions = torch.tensor(actions, dtype=torch.long, device=device)
-        # pi_probs = torch.tensor(pi_probs, dtype=torch.float32, device=device)
-        # returns = torch.tensor(returns, dtype=torch.float32, device=device)
-        return states, rwds, actions, pi_probs, returns
+        return np.array(episode_state), rwds, actions, pi_probs, returns

@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-parser = argparse.ArgumentParser(description='Plotting Results')
-parser.add_argument('--timestamp', type=str, default=None, help='Timestamp for the results directory')
+parser = argparse.ArgumentParser(description="Plotting Results")
+parser.add_argument(
+    "--timestamp", type=str, default=None, help="Timestamp for the results directory"
+)
 
 args = parser.parse_args()
 timestamp = args.timestamp
@@ -91,23 +93,27 @@ for i, label in enumerate(row_labels):
         pos = axs[i, 0].get_position()
         # Add text to the left of the row
         fig.text(
-            pos.x0 - 0.1,              # x position (left of the subplot)
-            pos.y0 + pos.height/2,     # y position (center of subplot)
-            label,                     # Label text
-            va='center',               # Vertical alignment
-            ha='right',                # Horizontal alignment
-            fontsize=12,               # Font size
-            fontweight='bold'          # Make it bold
+            pos.x0 - 0.1,  # x position (left of the subplot)
+            pos.y0 + pos.height / 2,  # y position (center of subplot)
+            label,  # Label text
+            va="center",  # Vertical alignment
+            ha="right",  # Horizontal alignment
+            fontsize=12,  # Font size
+            fontweight="bold",  # Make it bold
         )
 
 # row_labels = ["Early state", "Middle state", "Late state"]
 # # left margin in figure coords
-# x_pos = 6 
+# x_pos = 6
 
 # for i, label in enumerate(row_labels):
 #     # y: center of row i in figure coords.
-#     y_pos = 1 - (i + 0.5) / 3  
+#     y_pos = 1 - (i + 0.5) / 3
 #     plt.text(x_pos, y_pos, label, va="center", ha="left", fontsize=12)
 
-plt.show()
-plt.savefig(os.path.join(root_dir, f"MuZero_Ablation_Comparison_{int(time.time())}.png"), format='png', dpi=1200)
+# plt.show()
+plt.savefig(
+    os.path.join(root_dir, f"MuZero_Ablation_Comparison_{timestamp}.png"),
+    format="png",
+    dpi=1200,
+)

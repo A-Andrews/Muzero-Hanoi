@@ -7,3 +7,4 @@ img/training_performance/*
 img/action_trees/*
 stats/*
 gradcam_results/*
+.DS_Store

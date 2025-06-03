@@ -1,0 +1,29 @@
+echo "Running no ablations"Add commentMore actions
+python3 acting_experiments/acting_ablations.py "$@"
+python3 acting_experiments/acting_ablations.py --start 0 "$@"
+python3 acting_experiments/acting_ablations.py --start 1 "$@"
+python3 acting_experiments/acting_ablations.py --start 2 "$@"
+
+echo "Running ablations to policy"
+python3 acting_experiments/acting_ablations.py --reset_latent_policy True "$@"
+python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_policy True "$@"
+python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_policy True "$@"
+python3 acting_experiments/acting_ablations.py --start 2 --reset_latent_policy True "$@"
+
+echo "Running ablations to value"
+python3 acting_experiments/acting_ablations.py --reset_latent_values True "$@"
+python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_values True "$@"
+python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_values True "$@"
+python3 acting_experiments/acting_ablations.py --start 2 --reset_latent_values True "$@"
+
+echo "Running ablations to reward"
+python3 acting_experiments/acting_ablations.py --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 2 --reset_latent_rwds True "$@"
+
+echo "Running ablations to value and reward""$@"
+python3 acting_experiments/acting_ablations.py --reset_latent_values True --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 0 --reset_latent_values True --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 1 --reset_latent_values True --reset_latent_rwds True "$@"
+python3 acting_experiments/acting_ablations.py --start 2 --reset_latent_values True --reset_latent_rwds True "$@"

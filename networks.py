@@ -86,11 +86,11 @@ class MuZeroNet(nn.Module):
             value
         )  # NOTE: Not sure why it doesn't predict rwd for initial inference
 
-        # pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
-        pi_probs = pi_probs.squeeze(0)
-        value = value.squeeze(0)
-        rwd = rwd.squeeze(0)
-        h_state = h_state.squeeze(0)
+        pi_probs = pi_probs.squeeze(0).cpu().numpy()
+        value = value.squeeze(0).cpu().item()
+        rwd = rwd.squeeze(0).cpu().item()
+        h_state = h_state.squeeze(0).cpu().numpy()
+
         return h_state, rwd, pi_probs, value
 
     @torch.no_grad()
@@ -108,11 +108,10 @@ class MuZeroNet(nn.Module):
 
         pi_probs = F.softmax(pi_logits, dim=-1)  # NOTE: dim ?
 
-        # pi_probs, value, rwd, h_state = pi_probs.squeeze(0).cpu().numpy(), value.squeeze(0).cpu().item(), rwd.squeeze(0).cpu().item(), h_state.squeeze(0).cpu().numpy()
-        pi_probs = pi_probs.squeeze(0)
-        value = value.squeeze(0)
-        rwd = rwd.squeeze(0)
-        h_state = h_state.squeeze(0)
+        pi_probs = pi_probs.squeeze(0).cpu().numpy()
+        value = value.squeeze(0).cpu().item()
+        rwd = rwd.squeeze(0).cpu().item()
+        h_state = h_state.squeeze(0).cpu().numpy()
 
         return h_state, rwd, pi_probs, value
 
@@ -123,13 +122,13 @@ class MuZeroNet(nn.Module):
         self.optimiser.step()
 
     def represent(self, x):
-        h_state = self.representation_net(x.to(self.dev))
+        h_state = self.representation_net(x)
         norm_h_state = self.normalize_h_state(h_state)
         return norm_h_state
 
     def dynamics(self, h_state, action):
         x = torch.cat([h_state, action], dim=-1)
-        new_h_state = self.dynamic_net(x.to(self.dev))
+        new_h_state = self.dynamic_net(x)
         rwd_prediction = self.rwd_net(new_h_state)
 
         if self.TD_return:

@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-sys.path.append("/well/costa/users/zqa082/Muzero-Hanoi")
+sys.path.append("/Users/austinandrews/Projects/Muzero-Hanoi")
 import logging
 import os
 
@@ -16,15 +16,19 @@ from utils import setup_logger
 
 """ Ablate different components of a trained Muzero agent to assess their impact on planning across different task difficulties (ES, MS, LS) """
 
+
 ## ======= Set seeds for debugging =======
-def set_seed(seed = 1):
+def set_seed(seed=1):
     torch.manual_seed(seed)
     np.random.seed(seed)
     setup_logger(seed)
 
+
 ## ======== Experimental set-up ==========
 # Set variables below to run different experiments
-def ablate_networks(reset_latent_policy, reset_latent_values, reset_latent_rwds, networks):
+def ablate_networks(
+    reset_latent_policy, reset_latent_values, reset_latent_rwds, networks
+):
     # Reset latent policy
     if reset_latent_policy:
         networks.policy_net.apply(
@@ -40,8 +44,9 @@ def ablate_networks(reset_latent_policy, reset_latent_values, reset_latent_rwds,
 
     return networks
 
+
 ## ------ Define starting states for additional analysis ----
-def get_starting_state(env, start = None):
+def get_starting_state(env, start=None):
     if start is not None:
         # I specifically selected states which are not ecounted during the optimal traject from the training starting state
         # ES: early state, MS: mid state, LS: late state
@@ -62,9 +67,12 @@ def get_starting_state(env, start = None):
         file_indx = "RandState"
     return file_indx
 
+
 ## ======== Run acting ==========
 @torch.no_grad()
-def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, temperature):
+def get_results(
+    env, start, networks, mcts, episode, n_mcts_simulations_range, temperature
+):
     data = []
     for n in n_mcts_simulations_range:
         errors = []
@@ -119,11 +127,22 @@ def get_results(env, start, networks, mcts, episode, n_mcts_simulations_range, t
     logging.info(data)
     return data
 
+
 ## ===== Save results =========
-def save_results_to_file(seed, file_indx, command_line, data, reset_latent_policy, reset_latent_values, reset_latent_rwds, save_results, timestamp):
+def save_results_to_file(
+    seed,
+    file_indx,
+    command_line,
+    data,
+    reset_latent_policy,
+    reset_latent_values,
+    reset_latent_rwds,
+    save_results,
+    timestamp,
+):
     # Create directory to store results
     file_dir = os.path.join("stats", "Hanoi", timestamp)
-    file_dir = os.path.join(file_dir, str(seed), str(file_indx))
+    file_dir = os.path.join(file_dir, str(file_indx))
     # Create directory if it did't exist before
     os.makedirs(file_dir, exist_ok=True)
 
@@ -150,6 +169,7 @@ def save_results_to_file(seed, file_indx, command_line, data, reset_latent_polic
             f.write(command_line)
         # Store accuracy
         torch.save(torch.tensor(data), acc_dir)
+
 
 if __name__ == "__main__":
     # Run the script
@@ -180,7 +200,7 @@ if __name__ == "__main__":
     # dirichlet_alpha = 0
     # temperature = 0  # 0.1
     # discount = 0.8
-    # 
+    #
     parser = argparse.ArgumentParser(description="Muzero acting ablation experiments")
     parser.add_argument(
         "--seed",
@@ -266,21 +286,27 @@ if __name__ == "__main__":
         default=3,
         help="Number of disks in the Towers of Hanoi (default: 3)",
     )
-    parser.add_argument("--lr" , type=float, default=0, help="Learning rate (default: 0)")
+    parser.add_argument(
+        "--lr", type=float, default=0, help="Learning rate (default: 0)"
+    )
     parser.add_argument(
         "--TD_return",
         type=bool,
         default=True,
         help="Use TD return (default: True)",
     )
-    parser.add_argument("--n_action", type=int, default=6, help="Number of actions (default: 6)")
+    parser.add_argument(
+        "--n_action", type=int, default=6, help="Number of actions (default: 6)"
+    )
     parser.add_argument(
         "--start",
         type=int,
         default=None,
         help="Starting state index (default: None)",
     )
-    parser.add_argument("--timestamp", type=str, default=None, help="Timestamp for results")
+    parser.add_argument(
+        "--timestamp", type=str, default=None, help="Timestamp for results"
+    )
     args = parser.parse_args()
     seed = args.seed
     env_name = args.env_name
@@ -305,7 +331,6 @@ if __name__ == "__main__":
     env = TowersOfHanoi(N=N, max_steps=max_steps)
     s_space_size = env.oneH_s_size
 
-
     set_seed(args.seed)
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     file_indx = get_starting_state(env, start)
@@ -323,12 +348,14 @@ if __name__ == "__main__":
         device=dev,
     )
     networks = MuZeroNet(
-        rpr_input_s=s_space_size, action_s=n_action, lr=lr, TD_return=TD_return, device=dev
+        rpr_input_s=s_space_size,
+        action_s=n_action,
+        lr=lr,
+        TD_return=TD_return,
+        device=dev,
     ).to(dev)
     model_path = os.path.join("stats", "Hanoi", timestamp, "muzero_model.pt")
-    model_dict = torch.load(
-        model_path, map_location=dev
-    )
+    model_dict = torch.load(model_path, map_location=dev)
     networks.load_state_dict(model_dict["Muzero_net"])
     networks.optimiser.load_state_dict(model_dict["Net_optim"])
 
@@ -354,5 +381,6 @@ if __name__ == "__main__":
         reset_latent_values,
         reset_latent_rwds,
         save_results,
+        timestamp,
     )
     logging.info("Results saved")

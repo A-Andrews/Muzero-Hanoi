@@ -1,5 +1,3 @@
-import logging
-
 import numpy as np
 import torch
 
@@ -21,9 +19,6 @@ class MCTS:
         clip_grad=True,
         root_exploration_eps=0.25,
         known_bounds=[],
-        reuse_tree=False,
-        rebuild_frequency=5,
-        merge_tree=False,
     ):
         self.min_max_stats = MinMaxStats()
         self.pb_c_base = 19652
@@ -35,15 +30,6 @@ class MCTS:
         self.n_simulations = n_simulations
         self.batch_s = batch_s
         self.dev = device
-
-        self.reuse_tree = reuse_tree  # Option to reuse/save the tree
-        self.rebuild_frequency = (
-            rebuild_frequency  # Number of moves before rebuilding/pruning
-        )
-        self.current_step = 0
-        self.root = None
-
-        self.merge_tree = merge_tree
 
     def run_mcts(self, state, network, temperature, deterministic):
         """Run MCT
@@ -59,28 +45,8 @@ class MCTS:
             a float represent the value of the root node (based on the search).
         """
 
-        if (
-            self.reuse_tree
-            and not (self.current_step % self.rebuild_frequency == 0)
-            and self.root is not None
-            and self.root.is_expanded
-            and not self.merge_tree
-        ):
-            self.current_step += 1
-            child = self.root.best_child(self, self.min_max_stats)
-            self.root = child
-            action = child.move
-            if len(child.child_N) != 0:
-                pi_prob = self.generate_play_policy(
-                    child.child_N, temperature
-                )  # some issue when this is empty when it has 0 visits
-                child_Q = child.Q
-                return action, pi_prob, child_Q
-
-        self.current_step = 1
-
         # Create root node
-        state = torch.tensor(state, device=self.dev, dtype=torch.float32)
+        state = torch.from_numpy(state).to(self.dev, dtype=torch.float32)
         h_state, rwd, pi_probs, value = network.initial_inference(state)
         prior_prob = pi_probs
         root_node = Node(
@@ -121,8 +87,9 @@ class MCTS:
                 # print('Move: ', node.move,"\n")
 
             ## ==== Phase 2 - Expand leaf - based on parent state and action associated to that (best) leaf ====
-            h_state = torch.tensor(node.parent.h_state, dtype=torch.float32, device=self.dev)
-            # node.parent because while loop ends at not expanded (best) child
+            h_state = torch.from_numpy(node.parent.h_state).to(
+                self.dev, dtype=torch.float32
+            )  # node.parent because while loop ends at not expanded (best) child
             action = torch.tensor([node.move], dtype=torch.long, device=self.dev)
 
             # Convert action to 1-hot encoding
@@ -149,19 +116,12 @@ class MCTS:
 
         if deterministic:
             # Choose the action with the most visit n.
-            action_idx = torch.argmax(torch.as_tensor(child_visits, device=self.dev)).item()
+            action_idx = np.argmax(child_visits)
         else:
             # Sample a action.
-            pi_prob_tensor = torch.as_tensor(pi_prob, device=self.dev, dtype=torch.float32)
-            action_idx = torch.multinomial(pi_prob_tensor, 1).item()
+            action_idx = np.random.choice(np.arange(pi_prob.shape[0]), p=pi_prob)
 
         action = root_node.children[action_idx].move
-        if self.merge_tree:
-            # Merge the new tree with the current tree
-            self.root = self.merge_trees(self.root, root_node)
-        else:
-            # Reset the root node to the new root node
-            self.root = root_node
 
         # pi_prob and root_node.Q are returned to be stored for the training phase
         # root_node.Q is only needed if use TD-returns, by bootstrapping value of future (root) states to update values of current (root) state
@@ -181,19 +141,15 @@ class MCTS:
         Returns:
             action probabilities with added dirichlet noise.
         """
-        # device = prob.device
-        # prob = prob.detach().cpu().numpy()
-        # if not isinstance(prob, np.ndarray) or prob.dtype not in (
-        #     np.float32,
-        #     np.float64,
-        # ):
-        #     raise ValueError(f"Expect `prob` to be a numpy.array, got {prob}")
+        if not isinstance(prob, np.ndarray) or prob.dtype not in (
+            np.float32,
+            np.float64,
+        ):
+            raise ValueError(f"Expect `prob` to be a numpy.array, got {prob}")
 
-        alphas = torch.full_like(prob, alpha, dtype=torch.float32, device=prob.device)
-        noise = torch.distributions.Dirichlet(alphas).sample()
+        alphas = np.ones_like(prob) * alpha
+        noise = np.random.dirichlet(alphas)
         noised_prob = (1 - eps) * prob + eps * noise
-
-        # TODO noised_prob = torch.tensor(noised_prob, dtype=torch.float32, device=device)
 
         return noised_prob
 
@@ -211,45 +167,12 @@ class MCTS:
                 f"Expect `temperature` to be in the range [0.0, 1.0], got {temperature}"
             )
 
-        visits_count = torch.as_tensor(visits_count, dtype=torch.float32, device=self.dev)
+        visits_count = np.asarray(visits_count, dtype=np.int64)
 
         if temperature > 0.0:
             # limit the exponent in the range of [1.0, 5.0]
             # to avoid overflow when doing power operation over large numbers
             exp = max(1.0, min(5.0, 1.0 / temperature))
-            visits_count = visits_count.pow(exp)
+            visits_count = np.power(visits_count, exp)
 
-        return visits_count / visits_count.sum()
-
-    def merge_trees(self, old_root, new_root, bias=0.5):
-        """Merge the new tree with the current tree.
-        Args:
-            new_root: a Node instance representing the new root node of the new tree.
-        """
-
-        if old_root is not None and old_root.is_expanded:
-            old_root = old_root.best_child(self, self.min_max_stats)
-        else:
-            return new_root
-
-        # Merge the new tree with the current tree
-
-        old_root.N = int(old_root.N * bias + new_root.N * (1 - bias))
-        old_root.W = old_root.W * bias + new_root.W * (1 - bias)
-
-        # merge reward and value
-
-        for new_child in new_root.children:
-            matching_child = None
-            for old_child in old_root.children:
-                if old_child.move == new_child.move:
-                    matching_child = old_child
-                    break
-
-            if matching_child:
-                # Recursively merge if both nodes exist.
-                self.merge_trees(matching_child, new_child)
-            else:
-                # Otherwise, add the new child to the old node's children.
-                old_root.children.append(new_child)
-        return old_root
+        return visits_count / np.sum(visits_count)
