@@ -122,13 +122,13 @@ class MuZeroNet(nn.Module):
         self.optimiser.step()
 
     def represent(self, x):
-        h_state = self.representation_net(x.cpu())
+        h_state = self.representation_net(x)
         norm_h_state = self.normalize_h_state(h_state)
         return norm_h_state
 
     def dynamics(self, h_state, action):
         x = torch.cat([h_state, action], dim=-1)
-        new_h_state = self.dynamic_net(x.cpu())
+        new_h_state = self.dynamic_net(x)
         rwd_prediction = self.rwd_net(new_h_state)
 
         if self.TD_return:

@@ -48,4 +48,4 @@ for d in results:
         axs[i].set_ylabel('Error')
     i+=1
 plt.show()
-#plt.savefig('/Users/px19783/Desktop/CerebLatentPlanning_accuracies', format='png', dpi=1200)
+plt.savefig('/well/costa/users/zqa082/Muzero-Hanoi/img/output_graphs.png', format='png', dpi=1200)
