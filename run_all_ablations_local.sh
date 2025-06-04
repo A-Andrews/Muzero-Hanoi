@@ -1,4 +1,4 @@
-echo "Running no ablations"Add commentMore actions
+echo "Running no ablations"
 python3 acting_experiments/acting_ablations.py "$@"
 python3 acting_experiments/acting_ablations.py --start 0 "$@"
 python3 acting_experiments/acting_ablations.py --start 1 "$@"

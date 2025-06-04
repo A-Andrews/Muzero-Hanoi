@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-sys.path.append("/Users/austinandrews/Projects/Muzero-Hanoi")
+sys.path.append("/well/costa/users/zqa082/Muzero-Hanoi")
 import logging
 import os
 
