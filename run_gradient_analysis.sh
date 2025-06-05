@@ -15,9 +15,4 @@ echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
 
-python3 gradient_analysis.py \
-    --model_path "/well/costa/users/zqa082/Muzero-Hanoi/stats/Hanoi/1748981888/muzero_model.pt" \
-    --state "0,0,0" \
-    --target_layer "representation_net.2" \
-    --analysis_type "policy" \
-    --n_disks 3
+python3 gradient_analysis.py "$@"
