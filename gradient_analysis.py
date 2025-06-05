@@ -17,6 +17,13 @@ from utils import oneHot_encoding, setup_logger
 # record gradients of networks
 
 
+def get_activation(name, fmap_dict):
+    def hook(model, input, output):
+        fmap_dict[name] = output.detach().cpu()
+
+    return hook
+
+
 def save_results(data, timestamp, state):
     state_name = "_".join(map(str, state))
     file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
@@ -28,7 +35,10 @@ def save_results(data, timestamp, state):
         logging.info(f"Saved gradients for {network} to {file_path}")
 
 
-def visualize_gradients_subgraphs(gradients_dict, timestamp, state):
+def visualize_gradients_subgraphs(
+    gradients_dict, timestamp, state, feature_maps_dict=None
+):
+
     state_name = "_".join(map(str, state))
     file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
     os.makedirs(file_dir, exist_ok=True)
@@ -37,9 +47,9 @@ def visualize_gradients_subgraphs(gradients_dict, timestamp, state):
 
     fig, axes = plt.subplots(
         nrows=num_nets,
-        ncols=3,
-        figsize=(18, 5 * num_nets),
-        gridspec_kw={"width_ratios": [1, 1, 1]},
+        ncols=4,
+        figsize=(24, 5 * num_nets),
+        gridspec_kw={"width_ratios": [1, 1, 1, 1]},
     )
 
     if num_nets == 1:
@@ -77,6 +87,25 @@ def visualize_gradients_subgraphs(gradients_dict, timestamp, state):
         axes[net_idx, 2].set_title(f"{net_name.capitalize()} - Grad Norms")
         axes[net_idx, 2].set_xlabel("Layer")
         axes[net_idx, 2].set_ylabel("||Grad|| (L2)")
+
+        # 4. Feature Map Visualization (e.g., for first layer)
+        # Try both possible layer names (since you registered _linear1 and _linear2)
+        layer_names = [f"{net_name}_linear1", f"{net_name}_linear2"]
+        fmap = None
+        for name in layer_names:
+            if feature_maps_dict and name in feature_maps_dict:
+                fmap = feature_maps_dict[name]
+                break
+        if fmap is not None:
+            if fmap.ndim == 4:
+                axes[net_idx, 3].imshow(
+                    fmap[0, 0].numpy(), cmap="viridis", aspect="auto"
+                )
+            elif fmap.ndim == 2:
+                axes[net_idx, 3].plot(fmap[0].numpy())
+            axes[net_idx, 3].set_title(f"{net_name.capitalize()} - Feature Map")
+        else:
+            axes[net_idx, 3].text(0.5, 0.5, "No feature map", ha="center", va="center")
 
     plt.tight_layout()
     plt.savefig(
@@ -215,8 +244,41 @@ if __name__ == "__main__":
     networks.load_state_dict(model_dict["Muzero_net"])
     networks.optimiser.load_state_dict(model_dict["Net_optim"])
 
+    feature_maps = {}
+    networks.representation_net[0].register_forward_hook(
+        get_activation("representation_linear1", feature_maps)
+    )
+    networks.representation_net[2].register_forward_hook(
+        get_activation("representation_linear2", feature_maps)
+    )
+    networks.dynamic_net[0].register_forward_hook(
+        get_activation("dynamic_linear1", feature_maps)
+    )
+    networks.dynamic_net[2].register_forward_hook(
+        get_activation("dynamic_linear2", feature_maps)
+    )
+    networks.rwd_net[0].register_forward_hook(
+        get_activation("reward_linear1", feature_maps)
+    )
+    networks.rwd_net[2].register_forward_hook(
+        get_activation("reward_linear2", feature_maps)
+    )
+    networks.policy_net[0].register_forward_hook(
+        get_activation("policy_linear1", feature_maps)
+    )
+    networks.policy_net[2].register_forward_hook(
+        get_activation("policy_linear2", feature_maps)
+    )
+    networks.value_net[0].register_forward_hook(
+        get_activation("value_linear1", feature_maps)
+    )
+    networks.value_net[2].register_forward_hook(
+        get_activation("value_linear2", feature_maps)
+    )
+
     data = get_results(env, networks, mcts, state)
 
+    logging.info(f"Collected features: {feature_maps}")
     save_results(data, timestamp, state)
-    visualize_gradients_subgraphs(data, timestamp, state)
+    visualize_gradients_subgraphs(data, timestamp, state, feature_maps)
     logging.info("Gradient analysis completed and results saved.")
