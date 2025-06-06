@@ -35,9 +35,20 @@ def save_results(data, timestamp, state):
         logging.info(f"Saved gradients for {network} to {file_path}")
 
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+
 def visualize_gradients_subgraphs(
-    gradients_dict, timestamp, state, feature_maps_dict=None
+    gradients_dict, timestamp, state, feature_maps_dict=None, input_sensitivities_dict=None
 ):
+    plt.rcParams.update({
+        "font.family": "serif",
+        "axes.titlesize": 20,
+        "axes.labelsize": 16,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+    })
 
     state_name = "_".join(map(str, state))
     file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
@@ -47,13 +58,20 @@ def visualize_gradients_subgraphs(
 
     fig, axes = plt.subplots(
         nrows=num_nets,
-        ncols=4,
-        figsize=(24, 5 * num_nets),
-        gridspec_kw={"width_ratios": [1, 1, 1, 1]},
+        ncols=5,
+        figsize=(32, 5 * num_nets),
+        gridspec_kw={"width_ratios": [1, 1, 1, 1, 1]},
+        constrained_layout=True
     )
+
 
     if num_nets == 1:
         axes = axes[np.newaxis, :]  # To always index as [net_idx, col]
+
+    for ax in axes.flat:
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     for net_idx, net_name in enumerate(net_names):
         grads = [
@@ -64,8 +82,10 @@ def visualize_gradients_subgraphs(
         # 1. Mean Absolute Gradient per Layer (Bar)
         magnitudes = [g.abs().mean().item() for g in grads]
         layers = np.arange(len(magnitudes))
-        axes[net_idx, 0].bar(layers, magnitudes, color="skyblue")
-        axes[net_idx, 0].set_title(f"{net_name.capitalize()} - Mean Abs Grad")
+        axes[net_idx, 0].bar(
+            layers, magnitudes, color="#3891A6", edgecolor="k", linewidth=0.7
+        )
+        axes[net_idx, 0].set_title(f"{net_name.capitalize()} – Mean Abs Grad")
         axes[net_idx, 0].set_xlabel("Layer")
         axes[net_idx, 0].set_ylabel("Mean |Grad|")
 
@@ -73,9 +93,9 @@ def visualize_gradients_subgraphs(
         if grads:
             all_grads = torch.cat([g.flatten() for g in grads])
             axes[net_idx, 1].hist(
-                all_grads.detach().cpu().numpy(), bins=80, color="salmon", alpha=0.7
+                all_grads.detach().cpu().numpy(), bins=80, color="#F26430", edgecolor="k", alpha=0.7
             )
-            axes[net_idx, 1].set_title(f"{net_name.capitalize()} - Grad Distribution")
+            axes[net_idx, 1].set_title(f"{net_name.capitalize()} – Grad Distribution")
             axes[net_idx, 1].set_xlabel("Gradient Value")
             axes[net_idx, 1].set_ylabel("Frequency")
         else:
@@ -83,13 +103,14 @@ def visualize_gradients_subgraphs(
 
         # 3. Gradient Norm per Layer (Line)
         norms = [g.norm().item() for g in grads]
-        axes[net_idx, 2].plot(layers, norms, "-o", color="seagreen")
-        axes[net_idx, 2].set_title(f"{net_name.capitalize()} - Grad Norms")
+        axes[net_idx, 2].plot(
+            layers, norms, "-o", color="#3E8E7E", markersize=8, linewidth=2, markeredgecolor="k"
+        )
+        axes[net_idx, 2].set_title(f"{net_name.capitalize()} – Grad Norms")
         axes[net_idx, 2].set_xlabel("Layer")
         axes[net_idx, 2].set_ylabel("||Grad|| (L2)")
 
-        # 4. Feature Map Visualization (e.g., for first layer)
-        # Try both possible layer names (since you registered _linear1 and _linear2)
+        # 4. Feature Map
         layer_names = [f"{net_name}_linear1", f"{net_name}_linear2"]
         fmap = None
         for name in layer_names:
@@ -102,18 +123,34 @@ def visualize_gradients_subgraphs(
                     fmap[0, 0].numpy(), cmap="viridis", aspect="auto"
                 )
             elif fmap.ndim == 2:
-                axes[net_idx, 3].plot(fmap[0].numpy())
-            axes[net_idx, 3].set_title(f"{net_name.capitalize()} - Feature Map")
+                axes[net_idx, 3].plot(fmap[0].numpy(), color="#EE6C4D", linewidth=1.2)
+            axes[net_idx, 3].set_title(f"{net_name.capitalize()} – Feature Map")
         else:
             axes[net_idx, 3].text(0.5, 0.5, "No feature map", ha="center", va="center")
 
-    plt.tight_layout()
+        # 5. Saliency Map (Input Sensitivity)
+        if input_sensitivities_dict and net_name in input_sensitivities_dict:
+            saliency = np.abs(input_sensitivities_dict[net_name])
+            axes[net_idx, 4].bar(
+                range(len(saliency)), saliency, color="#9575CD", edgecolor="k", linewidth=0.6
+            )
+            axes[net_idx, 4].set_title(f"{net_name.capitalize()} – Input Sensitivity")
+            axes[net_idx, 4].set_xlabel("Input Feature")
+            axes[net_idx, 4].set_ylabel("|∂output/∂input|")
+        else:
+            axes[net_idx, 4].text(0.5, 0.5, "No saliency", ha="center", va="center")
+
+    fig.suptitle(
+        f"MuZero Gradient & Feature Diagnostics for State: {state_name}", fontsize=28, y=1.03
+    )
     plt.savefig(
         os.path.join(file_dir, f"gradients_subgraphs.png"),
         dpi=300,
         bbox_inches="tight",
         format="png",
     )
+    plt.close(fig)
+
 
 
 def get_results(env, networks, mcts, state):
@@ -133,7 +170,6 @@ def get_results(env, networks, mcts, state):
     pi_logits, value = networks.prediction(h_state)
 
     pi_probs = F.softmax(pi_logits, dim=-1)
-    rwd = torch.zeros_like(value)  # Initial inference has zero reward
 
     dummy_action = torch.zeros(1, networks.num_actions, device=networks.dev)
     dummy_action[0, 0] = 1.0  # Set first action to 1
@@ -182,6 +218,43 @@ def get_results(env, networks, mcts, state):
         f"Collected gradients for all networks: \n Representation gradients: {representation_grad} \n Dynamic gradients: {dynamic_grad} \n Reward gradients: {rwd_grad} \n Policy gradients: {policy_grad} \n Value gradients: {value_grad}"
     )
     return data
+
+def compute_saliency(state, N, networks):
+    input_sensitivities = {}
+
+    # Make sure your input is a leaf and requires grad
+    oneH_c_state_np = oneHot_encoding(state, n_integers=N)
+    oneH_c_state = torch.tensor(oneH_c_state_np, dtype=torch.float32, device=networks.dev)
+    oneH_c_state = oneH_c_state.unsqueeze(0)
+    oneH_c_state.requires_grad_()
+
+    # Forward pass
+    h_state = networks.represent(oneH_c_state)
+    pi_logits, value = networks.prediction(h_state)
+    rwd = torch.zeros_like(value)
+    dummy_action = torch.zeros(1, networks.num_actions, device=networks.dev)
+    dummy_action[0, 0] = 1.0
+    next_h_state, next_rwd = networks.dynamics(h_state, dummy_action)
+
+    # For each head, compute saliency (input gradient)
+    outputs = {
+        "representation": h_state.mean(),
+        "dynamic": next_h_state.mean(),
+        "reward": next_rwd.mean(),
+        "policy": pi_logits[0, pi_logits.argmax(dim=1).item()],  # Best action logit
+        "value": value.mean(),
+    }
+
+    for net_name, scalar_output in outputs.items():
+        networks.zero_grad()
+        if oneH_c_state.grad is not None:
+            oneH_c_state.grad.zero_()
+        scalar_output.backward(retain_graph=True)
+        # Save abs gradient (saliency) for this head
+        input_sensitivities[net_name] = oneH_c_state.grad.detach().cpu().numpy()[0]
+
+    return input_sensitivities
+
 
 
 def set_seed(seed=1):
@@ -277,8 +350,9 @@ if __name__ == "__main__":
     )
 
     data = get_results(env, networks, mcts, state)
+    saliency = compute_saliency(state, N, networks)
 
     logging.info(f"Collected features: {feature_maps}")
     save_results(data, timestamp, state)
-    visualize_gradients_subgraphs(data, timestamp, state, feature_maps)
+    visualize_gradients_subgraphs(data, timestamp, state, feature_maps, saliency)
     logging.info("Gradient analysis completed and results saved.")
