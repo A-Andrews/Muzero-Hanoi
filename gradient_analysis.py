@@ -36,12 +36,15 @@ def save_results(data, timestamp, state):
 
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import numpy as np
+import seaborn as sns
 
 
 def visualize_gradients_subgraphs(
     gradients_dict, timestamp, state, feature_maps_dict=None, input_sensitivities_dict=None
 ):
+    # Set style and colorblind-friendly palette
     plt.rcParams.update({
         "font.family": "serif",
         "axes.titlesize": 20,
@@ -49,7 +52,8 @@ def visualize_gradients_subgraphs(
         "xtick.labelsize": 14,
         "ytick.labelsize": 14,
     })
-
+    # Use seaborn's colorblind palette
+    cb_colors = sns.color_palette("colorblind")
     state_name = "_".join(map(str, state))
     file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
     os.makedirs(file_dir, exist_ok=True)
@@ -63,7 +67,6 @@ def visualize_gradients_subgraphs(
         gridspec_kw={"width_ratios": [1, 1, 1, 1, 1]},
         constrained_layout=True
     )
-
 
     if num_nets == 1:
         axes = axes[np.newaxis, :]  # To always index as [net_idx, col]
@@ -82,32 +85,48 @@ def visualize_gradients_subgraphs(
         # 1. Mean Absolute Gradient per Layer (Bar)
         magnitudes = [g.abs().mean().item() for g in grads]
         layers = np.arange(len(magnitudes))
-        axes[net_idx, 0].bar(
-            layers, magnitudes, color="#3891A6", edgecolor="k", linewidth=0.7
+        bars = axes[net_idx, 0].bar(
+            layers, magnitudes, color=cb_colors[0], edgecolor="k", linewidth=0.7
         )
         axes[net_idx, 0].set_title(f"{net_name.capitalize()} – Mean Abs Grad")
-        axes[net_idx, 0].set_xlabel("Layer")
+        if len(magnitudes) > 0:
+                max_idx = np.argmax(magnitudes)
+                bars[max_idx].set_color(cb_colors[6])
+
+        if net_idx == num_nets - 1:
+            axes[net_idx, 0].set_xlabel("Layer")
+        else:
+            axes[net_idx, 0].set_xlabel("")
+            axes[net_idx, 0].set_xticklabels([])
         axes[net_idx, 0].set_ylabel("Mean |Grad|")
 
         # 2. Gradient Distribution (Histogram)
         if grads:
             all_grads = torch.cat([g.flatten() for g in grads])
             axes[net_idx, 1].hist(
-                all_grads.detach().cpu().numpy(), bins=80, color="#F26430", edgecolor="k", alpha=0.7
+                all_grads.detach().cpu().numpy(), bins=80, color=cb_colors[1], edgecolor="k", alpha=0.7
             )
-            axes[net_idx, 1].set_title(f"{net_name.capitalize()} – Grad Distribution")
-            axes[net_idx, 1].set_xlabel("Gradient Value")
-            axes[net_idx, 1].set_ylabel("Frequency")
         else:
             axes[net_idx, 1].text(0.5, 0.5, "No gradients", ha="center", va="center")
+        axes[net_idx, 1].set_title(f"{net_name.capitalize()} – Grad Distribution")
+        if net_idx == num_nets - 1:
+            axes[net_idx, 1].set_xlabel("Gradient Value")
+        else:
+            axes[net_idx, 1].set_xlabel("")
+            axes[net_idx, 1].set_xticklabels([])
+        axes[net_idx, 1].set_ylabel("Frequency")
 
         # 3. Gradient Norm per Layer (Line)
         norms = [g.norm().item() for g in grads]
         axes[net_idx, 2].plot(
-            layers, norms, "-o", color="#3E8E7E", markersize=8, linewidth=2, markeredgecolor="k"
+            layers, norms, "-o", color=cb_colors[2], markersize=8, linewidth=2, markeredgecolor="k"
         )
         axes[net_idx, 2].set_title(f"{net_name.capitalize()} – Grad Norms")
-        axes[net_idx, 2].set_xlabel("Layer")
+        if net_idx == num_nets - 1:
+            axes[net_idx, 2].set_xlabel("Layer")
+        else:
+            axes[net_idx, 2].set_xlabel("")
+            axes[net_idx, 2].set_xticklabels([])
         axes[net_idx, 2].set_ylabel("||Grad|| (L2)")
 
         # 4. Feature Map
@@ -120,25 +139,38 @@ def visualize_gradients_subgraphs(
         if fmap is not None:
             if fmap.ndim == 4:
                 axes[net_idx, 3].imshow(
-                    fmap[0, 0].numpy(), cmap="viridis", aspect="auto"
+                    fmap[0, 0].numpy(), cmap="cividis", aspect="auto"
                 )
             elif fmap.ndim == 2:
-                axes[net_idx, 3].plot(fmap[0].numpy(), color="#EE6C4D", linewidth=1.2)
+                axes[net_idx, 3].plot(fmap[0].numpy(), color=cb_colors[3], linewidth=1.2)
             axes[net_idx, 3].set_title(f"{net_name.capitalize()} – Feature Map")
         else:
             axes[net_idx, 3].text(0.5, 0.5, "No feature map", ha="center", va="center")
+        if net_idx == num_nets - 1:
+            axes[net_idx, 3].set_xlabel("Unit")
+        else:
+            axes[net_idx, 3].set_xlabel("")
+            axes[net_idx, 3].set_xticklabels([])
+        axes[net_idx, 3].set_ylabel("")
 
         # 5. Saliency Map (Input Sensitivity)
         if input_sensitivities_dict and net_name in input_sensitivities_dict:
             saliency = np.abs(input_sensitivities_dict[net_name])
-            axes[net_idx, 4].bar(
-                range(len(saliency)), saliency, color="#9575CD", edgecolor="k", linewidth=0.6
+            bars = axes[net_idx, 4].bar(
+                range(len(saliency)), saliency, color=cb_colors[4], edgecolor="k", linewidth=0.6
             )
+            if len(saliency) > 0:
+                max_idx = np.argmax(saliency)
+                bars[max_idx].set_color(cb_colors[5])
             axes[net_idx, 4].set_title(f"{net_name.capitalize()} – Input Sensitivity")
-            axes[net_idx, 4].set_xlabel("Input Feature")
-            axes[net_idx, 4].set_ylabel("|∂output/∂input|")
         else:
             axes[net_idx, 4].text(0.5, 0.5, "No saliency", ha="center", va="center")
+        if net_idx == num_nets - 1:
+            axes[net_idx, 4].set_xlabel("Input Feature")
+        else:
+            axes[net_idx, 4].set_xlabel("")
+            axes[net_idx, 4].set_xticklabels([])
+        axes[net_idx, 4].set_ylabel("|∂output/∂input|")
 
     fig.suptitle(
         f"MuZero Gradient & Feature Diagnostics for State: {state_name}", fontsize=28, y=1.03
@@ -150,6 +182,7 @@ def visualize_gradients_subgraphs(
         format="png",
     )
     plt.close(fig)
+
 
 
 
