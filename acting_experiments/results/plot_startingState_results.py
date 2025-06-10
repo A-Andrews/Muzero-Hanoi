@@ -36,6 +36,14 @@ label_5 = "ResetLatentVal_ResetLatentRwd"
 
 labels = [label_1, label_2, label_3, lable_4, label_5]
 
+col_colors = [
+    "#1f77b4",  # blue
+    "#ff7f0e",  # orange
+    "#2ca02c",  # green
+    "#d62728",  # red
+    "#9467bd",  # purple
+]
+
 # Init figure
 font_s = 7
 mpl.rc("font", size=font_s)
@@ -72,12 +80,17 @@ for d in directories:
 
     i = 0
     for r in results:
-        axs[e, i].plot(r[:, 0], r[:, 1])
-        axs[e, i].set_ylim([0, 70])
+        axs[e, i].plot(r[:, 0], r[:, 1], color=col_colors[i])
+        axs[e, i].set_ylim([0, 100])
         axs[e, i].spines["right"].set_visible(False)
         axs[e, i].spines["top"].set_visible(False)
         if i == 0:
-            axs[e, i].set_ylabel("Error")
+            if e == 0:
+                axs[e, i].set_ylabel("Far\nError")
+            elif e == 1:
+                axs[e, i].set_ylabel("Mid\nError")
+            elif e == 2:
+                axs[e, i].set_ylabel("Close\nError")
         if e == 0:
             axs[e, i].set_title(labels[i], fontsize=font_s)
         if e == len(directories) - 1:
@@ -85,35 +98,100 @@ for d in directories:
         i += 1
     e += 1
 
-row_labels = ["Far from goal", "Mid-distance", "Close to goal"]
+fig_bar, axs_bar = plt.subplots(
+    nrows=1, ncols=len(directories), figsize=(7.5, 2.2), sharey=True
+)
 
-for i, label in enumerate(row_labels):
-    if i < len(directories):
-        # Get the position of the first subplot in this row
-        pos = axs[i, 0].get_position()
-        # Add text to the left of the row
-        fig.text(
-            pos.x0 - 0.1,  # x position (left of the subplot)
-            pos.y0 + pos.height / 2,  # y position (center of subplot)
-            label,  # Label text
-            va="center",  # Vertical alignment
-            ha="right",  # Horizontal alignment
-            fontsize=12,  # Font size
-            fontweight="bold",  # Make it bold
+for e, d in enumerate(directories):
+    results = []
+    file_dir = os.path.join(root_dir, d)
+    for l in labels:
+        results.append(
+            torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
+        )
+    results = np.array(results)
+    mu_zero_avg = results[0][:, 1].mean()
+
+    times_to_reach = []
+    never_reached_mask = []
+    for j, r in enumerate(results):
+        indices = np.where(r[:, 1] <= mu_zero_avg)[0]
+        if len(indices) > 0:
+            times_to_reach.append(r[indices[0], 0])
+            never_reached_mask.append(False)
+        else:
+            times_to_reach.append(r[-1, 0])
+            never_reached_mask.append(True)
+
+    bars = axs_bar[e].bar(labels, times_to_reach, color=col_colors, edgecolor="black")
+    axs_bar[e].set_title(["Far", "Mid", "Close"][e])
+    axs_bar[e].set_ylabel("Simulations to\nreach MuZero mean error")
+    axs_bar[e].tick_params(axis="x", rotation=45)
+
+    # Add hatching and/or asterisks for "never reached"
+    for idx, (bar, never) in enumerate(zip(bars, never_reached_mask)):
+        if never:
+            bar.set_hatch("//")
+            # Optional: Add asterisk above the bar
+            axs_bar[e].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 2,  # adjust as needed
+                "*",
+                ha="center",
+                va="bottom",
+                color="red",
+                fontsize=14,
+                fontweight="bold",
+            )
+        else:
+            # If you want, annotate the value for normal bars as well
+            axs_bar[e].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 2,
+                f"{int(bar.get_height())}",
+                ha="center",
+                va="bottom",
+                color="black",
+                fontsize=9,
+            )
+
+fig_bar.tight_layout()
+fig_bar.savefig(
+    os.path.join(root_dir, f"MuZero_Ablation_BarCharts_{timestamp}.png"), dpi=1200
+)
+
+# === Add Average Performance Bar Chart ===
+
+fig_avg, axs_avg = plt.subplots(
+    nrows=1, ncols=len(directories), figsize=(7.5, 2.2), sharey=True
+)
+
+for e, d in enumerate(directories):
+    results = []
+    file_dir = os.path.join(root_dir, d)
+    for l in labels:
+        # Load and get acting accuracy column
+        arr = torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
+        results.append(arr[:, 1].mean())  # Take mean acting accuracy
+    # Plot as bar chart
+    bars = axs_avg[e].bar(labels, results, color=col_colors, edgecolor="black")
+    axs_avg[e].set_title(["Far", "Mid", "Close"][e])
+    axs_avg[e].set_ylabel("Mean acting accuracy\n(lower is better)")
+    axs_avg[e].tick_params(axis="x", rotation=45)
+    # Annotate bars with their value
+    for idx, bar in enumerate(bars):
+        axs_avg[e].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.5,
+            f"{bar.get_height():.1f}",
+            ha="center",
+            va="bottom",
+            color="black",
+            fontsize=9,
         )
 
-# row_labels = ["Early state", "Middle state", "Late state"]
-# # left margin in figure coords
-# x_pos = 6
-
-# for i, label in enumerate(row_labels):
-#     # y: center of row i in figure coords.
-#     y_pos = 1 - (i + 0.5) / 3
-#     plt.text(x_pos, y_pos, label, va="center", ha="left", fontsize=12)
-
-# plt.show()
-plt.savefig(
-    os.path.join(root_dir, f"MuZero_Ablation_Comparison_{timestamp}.png"),
-    format="png",
+fig_avg.tight_layout()
+fig_avg.savefig(
+    os.path.join(root_dir, f"MuZero_Ablation_AveragePerformance_{timestamp}.png"),
     dpi=1200,
 )
