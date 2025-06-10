@@ -3,7 +3,9 @@ import logging
 import os
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import numpy as np
+import seaborn as sns
 import torch
 import torch.nn.functional as F
 
@@ -35,23 +37,23 @@ def save_results(data, timestamp, state):
         logging.info(f"Saved gradients for {network} to {file_path}")
 
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-import numpy as np
-import seaborn as sns
-
-
 def visualize_gradients_subgraphs(
-    gradients_dict, timestamp, state, feature_maps_dict=None, input_sensitivities_dict=None
+    gradients_dict,
+    timestamp,
+    state,
+    feature_maps_dict=None,
+    input_sensitivities_dict=None,
 ):
     # Set style and colorblind-friendly palette
-    plt.rcParams.update({
-        "font.family": "serif",
-        "axes.titlesize": 20,
-        "axes.labelsize": 16,
-        "xtick.labelsize": 14,
-        "ytick.labelsize": 14,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "axes.titlesize": 20,
+            "axes.labelsize": 16,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+        }
+    )
     # Use seaborn's colorblind palette
     cb_colors = sns.color_palette("colorblind")
     state_name = "_".join(map(str, state))
@@ -65,7 +67,7 @@ def visualize_gradients_subgraphs(
         ncols=5,
         figsize=(32, 5 * num_nets),
         gridspec_kw={"width_ratios": [1, 1, 1, 1, 1]},
-        constrained_layout=True
+        constrained_layout=True,
     )
 
     if num_nets == 1:
@@ -73,8 +75,8 @@ def visualize_gradients_subgraphs(
 
     for ax in axes.flat:
         ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     for net_idx, net_name in enumerate(net_names):
         grads = [
@@ -82,7 +84,18 @@ def visualize_gradients_subgraphs(
             for g in gradients_dict[net_name]
             if g is not None and isinstance(g, torch.Tensor)
         ]
-        # 1. Mean Absolute Gradient per Layer (Bar)
+
+        # --------------------------------------------------------------------
+        # 1. Mean Absolute Gradient per Layer (Bar Chart)
+        # --------------------------------------------------------------------
+        # This bar chart shows the average absolute gradient for each layer in the network.
+        # It helps to diagnose issues like vanishing or exploding gradients. A very low bar
+        # might indicate that a layer is not learning (vanishing gradient), while a very
+        # high bar can signal instability (exploding gradient).
+        #
+        # For a layer l with weights W_l, the value plotted is:
+        # M_l = (1 / |W_l|) * Σ_{w ∈ W_l} |∂L/∂w|
+        # where L is the loss and |W_l| is the number of parameters in the layer.
         magnitudes = [g.abs().mean().item() for g in grads]
         layers = np.arange(len(magnitudes))
         bars = axes[net_idx, 0].bar(
@@ -90,46 +103,71 @@ def visualize_gradients_subgraphs(
         )
         axes[net_idx, 0].set_title(f"{net_name.capitalize()} – Mean Abs Grad")
         if len(magnitudes) > 0:
-                max_idx = np.argmax(magnitudes)
-                bars[max_idx].set_color(cb_colors[6])
+            max_idx = np.argmax(magnitudes)
+            bars[max_idx].set_color(cb_colors[6])
 
-        if net_idx == num_nets - 1:
-            axes[net_idx, 0].set_xlabel("Layer")
-        else:
-            axes[net_idx, 0].set_xlabel("")
-            axes[net_idx, 0].set_xticklabels([])
+        axes[net_idx, 0].set_xlabel("Layer")
         axes[net_idx, 0].set_ylabel("Mean |Grad|")
 
+        # --------------------------------------------------------------------
         # 2. Gradient Distribution (Histogram)
+        # --------------------------------------------------------------------
+        # This histogram displays the distribution of all gradient values across all
+        # layers of the network. A healthy distribution is often centered around zero.
+        # This plot can reveal if many gradients are "stuck" at zero, which might
+        # indicate a problem with "dead neurons".
+        #
+        # This is a histogram of the set { ∂L/∂w } for all weights w in the network.
         if grads:
             all_grads = torch.cat([g.flatten() for g in grads])
             axes[net_idx, 1].hist(
-                all_grads.detach().cpu().numpy(), bins=80, color=cb_colors[1], edgecolor="k", alpha=0.7
+                all_grads.detach().cpu().numpy(),
+                bins=80,
+                color=cb_colors[1],
+                edgecolor="k",
+                alpha=0.7,
             )
         else:
             axes[net_idx, 1].text(0.5, 0.5, "No gradients", ha="center", va="center")
         axes[net_idx, 1].set_title(f"{net_name.capitalize()} – Grad Distribution")
-        if net_idx == num_nets - 1:
-            axes[net_idx, 1].set_xlabel("Gradient Value")
-        else:
-            axes[net_idx, 1].set_xlabel("")
-            axes[net_idx, 1].set_xticklabels([])
+        axes[net_idx, 1].set_xlabel("Gradient Value")
         axes[net_idx, 1].set_ylabel("Frequency")
 
-        # 3. Gradient Norm per Layer (Line)
+        # --------------------------------------------------------------------
+        # 3. Gradient Norm per Layer (Line Plot)
+        # --------------------------------------------------------------------
+        # This line plot shows the L2 norm of the gradients for each layer. It provides
+        # a measure of the total magnitude of the gradient for each layer's weights.
+        # This is another useful tool for identifying layers that might be suffering
+        # from exploding gradients (very high norm).
+        #
+        # For a layer l, the value plotted is the L2 norm (Frobenius norm for matrices):
+        # N_l = ||∂L/∂W_l||₂ = sqrt(Σ_{w ∈ W_l} (∂L/∂w)²)
         norms = [g.norm().item() for g in grads]
         axes[net_idx, 2].plot(
-            layers, norms, "-o", color=cb_colors[2], markersize=8, linewidth=2, markeredgecolor="k"
+            layers,
+            norms,
+            "-o",
+            color=cb_colors[2],
+            markersize=8,
+            linewidth=2,
+            markeredgecolor="k",
         )
         axes[net_idx, 2].set_title(f"{net_name.capitalize()} – Grad Norms")
-        if net_idx == num_nets - 1:
-            axes[net_idx, 2].set_xlabel("Layer")
-        else:
-            axes[net_idx, 2].set_xlabel("")
-            axes[net_idx, 2].set_xticklabels([])
+        axes[net_idx, 2].set_xlabel("Layer")
         axes[net_idx, 2].set_ylabel("||Grad|| (L2)")
 
-        # 4. Feature Map
+        # --------------------------------------------------------------------
+        # 4. Feature Map (Activation Visualization)
+        # --------------------------------------------------------------------
+        # This plot visualizes the activations (outputs) of the neurons in a specific
+        # layer, known as a feature map. It helps to understand what features the
+        # network is learning to detect at different stages. For example, it can
+        # show if certain neurons are consistently inactive ("dead").
+        #
+        # The plot shows the activation A_l of a layer l for a given input x:
+        # A_l = f(W_l * x + b_l)
+        # where f is the activation function.
         layer_names = [f"{net_name}_linear1", f"{net_name}_linear2"]
         fmap = None
         for name in layer_names:
@@ -142,22 +180,33 @@ def visualize_gradients_subgraphs(
                     fmap[0, 0].numpy(), cmap="cividis", aspect="auto"
                 )
             elif fmap.ndim == 2:
-                axes[net_idx, 3].plot(fmap[0].numpy(), color=cb_colors[3], linewidth=1.2)
+                axes[net_idx, 3].plot(
+                    fmap[0].numpy(), color=cb_colors[3], linewidth=1.2
+                )
             axes[net_idx, 3].set_title(f"{net_name.capitalize()} – Feature Map")
         else:
             axes[net_idx, 3].text(0.5, 0.5, "No feature map", ha="center", va="center")
-        if net_idx == num_nets - 1:
-            axes[net_idx, 3].set_xlabel("Unit")
-        else:
-            axes[net_idx, 3].set_xlabel("")
-            axes[net_idx, 3].set_xticklabels([])
+        axes[net_idx, 3].set_xlabel("Unit")
         axes[net_idx, 3].set_ylabel("")
 
+        # --------------------------------------------------------------------
         # 5. Saliency Map (Input Sensitivity)
+        # --------------------------------------------------------------------
+        # This bar chart, often called a saliency map, shows how sensitive the network's
+        # output is to each input feature. It is calculated as the absolute value of the
+        # gradient of the output with respect to the input. A high bar indicates that
+        # the corresponding input feature is very influential on the outcome.
+        #
+        # For an output O and an input feature x_i, the saliency S_i is:
+        # S_i = |∂O/∂x_i|
         if input_sensitivities_dict and net_name in input_sensitivities_dict:
             saliency = np.abs(input_sensitivities_dict[net_name])
             bars = axes[net_idx, 4].bar(
-                range(len(saliency)), saliency, color=cb_colors[4], edgecolor="k", linewidth=0.6
+                range(len(saliency)),
+                saliency,
+                color=cb_colors[4],
+                edgecolor="k",
+                linewidth=0.6,
             )
             if len(saliency) > 0:
                 max_idx = np.argmax(saliency)
@@ -165,15 +214,13 @@ def visualize_gradients_subgraphs(
             axes[net_idx, 4].set_title(f"{net_name.capitalize()} – Input Sensitivity")
         else:
             axes[net_idx, 4].text(0.5, 0.5, "No saliency", ha="center", va="center")
-        if net_idx == num_nets - 1:
-            axes[net_idx, 4].set_xlabel("Input Feature")
-        else:
-            axes[net_idx, 4].set_xlabel("")
-            axes[net_idx, 4].set_xticklabels([])
+        axes[net_idx, 4].set_xlabel("Input Feature")
         axes[net_idx, 4].set_ylabel("|∂output/∂input|")
 
     fig.suptitle(
-        f"MuZero Gradient & Feature Diagnostics for State: {state_name}", fontsize=28, y=1.03
+        f"MuZero Gradient & Feature Diagnostics for State: {state_name}",
+        fontsize=28,
+        y=1.03,
     )
     plt.savefig(
         os.path.join(file_dir, f"gradients_subgraphs.png"),
@@ -182,8 +229,6 @@ def visualize_gradients_subgraphs(
         format="png",
     )
     plt.close(fig)
-
-
 
 
 def get_results(env, networks, mcts, state):
@@ -252,42 +297,45 @@ def get_results(env, networks, mcts, state):
     )
     return data
 
+
 def compute_saliency(state, N, networks):
-    input_sensitivities = {}
-
-    # Make sure your input is a leaf and requires grad
-    oneH_c_state_np = oneHot_encoding(state, n_integers=N)
-    oneH_c_state = torch.tensor(oneH_c_state_np, dtype=torch.float32, device=networks.dev)
-    oneH_c_state = oneH_c_state.unsqueeze(0)
-    oneH_c_state.requires_grad_()
-
-    # Forward pass
-    h_state = networks.represent(oneH_c_state)
-    pi_logits, value = networks.prediction(h_state)
-    rwd = torch.zeros_like(value)
+    """
+    Compute per-head saliency by re-running the minimal forward+backward
+    for each network component.
+    """
+    # Precompute numpy state and dummy action
+    state_np = oneHot_encoding(state, n_integers=N)
     dummy_action = torch.zeros(1, networks.num_actions, device=networks.dev)
     dummy_action[0, 0] = 1.0
-    next_h_state, next_rwd = networks.dynamics(h_state, dummy_action)
 
-    # For each head, compute saliency (input gradient)
-    outputs = {
-        "representation": h_state.mean(),
-        "dynamic": next_h_state.mean(),
-        "reward": next_rwd.mean(),
-        "policy": pi_logits[0, pi_logits.argmax(dim=1).item()],  # Best action logit
-        "value": value.mean(),
+    # Define each head as a function mapping input→scalar
+    heads = {
+        "representation": lambda x: networks.represent(x).mean(),
+        "dynamic": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
+            0
+        ].mean(),
+        "reward": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
+            1
+        ].mean(),
+        "policy": lambda x: (lambda logits: logits[0, logits.argmax(dim=1).item()])(
+            networks.prediction(networks.represent(x))[0]
+        ),
+        "value": lambda x: networks.prediction(networks.represent(x))[1].mean(),
     }
 
-    for net_name, scalar_output in outputs.items():
+    saliencies = {}
+    for name, fn in heads.items():
+        # fresh input tensor
+        inp = torch.tensor(state_np, dtype=torch.float32, device=networks.dev)
+        inp = inp.unsqueeze(0).requires_grad_()
+
         networks.zero_grad()
-        if oneH_c_state.grad is not None:
-            oneH_c_state.grad.zero_()
-        scalar_output.backward(retain_graph=True)
-        # Save abs gradient (saliency) for this head
-        input_sensitivities[net_name] = oneH_c_state.grad.detach().cpu().numpy()[0]
+        out = fn(inp)  # forward up to this head
+        out.backward()  # compute ∂out/∂inp
 
-    return input_sensitivities
+        saliencies[name] = inp.grad.detach().cpu().numpy()[0]
 
+    return saliencies
 
 
 def set_seed(seed=1):
