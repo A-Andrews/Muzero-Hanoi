@@ -338,6 +338,173 @@ def compute_saliency(state, N, networks):
     return saliencies
 
 
+def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
+    """
+    Visualize the Hanoi state, optionally adjusting disk appearance for saliency.
+    """
+    rod_positions = [0, 1, 2]
+    disk_visual_props = {
+        "large": {"width": 0.8, "color": "firebrick", "label": "Large"},
+        "medium": {"width": 0.6, "color": "royalblue", "label": "Medium"},
+        "small": {"width": 0.4, "color": "forestgreen", "label": "Small"},
+    }
+    disk_order = ["large", "medium", "small"]
+
+    normalized_saliencies = {}
+    if saliency_per_disk:
+        saliency_dict = {
+            "small": saliency_per_disk[0],
+            "medium": saliency_per_disk[1],
+            "large": saliency_per_disk[2],
+        }
+        min_saliency, max_saliency = min(saliency_dict.values()), max(
+            saliency_dict.values()
+        )
+        if max_saliency == min_saliency:
+            normalized_saliencies = {disk: 0.5 for disk in disk_order}
+        else:
+            for disk in disk_order:
+                score = saliency_dict[disk]
+                normalized_saliencies[disk] = (score - min_saliency) / (
+                    max_saliency - min_saliency
+                )
+
+    ax.clear()
+    ax.hlines(0, -0.5, 2.5, colors="black", linewidth=3)
+    for rod_pos in rod_positions:
+        ax.vlines(rod_pos, 0, 3.5, colors="black", linewidth=2)
+
+    rod_counts = {0: 0, 1: 0, 2: 0}
+
+    for disk_name in disk_order:
+        disk_map = {"small": 0, "medium": 1, "large": 2}
+        rod = state[disk_map[disk_name]]
+
+        y_pos = 0.3 + rod_counts[rod] * 0.4
+        props = disk_visual_props[disk_name]
+
+        alpha_val, linewidth_val, edge_color = 1.0, 1.5, "black"
+        if saliency_per_disk:
+            norm_saliency = normalized_saliencies[disk_name]
+            alpha_val = 0.5 + norm_saliency * 0.5
+            linewidth_val = 1.5 + norm_saliency * 3.5
+            if norm_saliency > 0.95:
+                edge_color = "gold"
+
+        disk_text = f"{props['label'][0]}: {norm_saliency:.2f}"
+
+        rect = plt.Rectangle(
+            (rod - props["width"] / 2, y_pos),
+            props["width"],
+            0.3,
+            facecolor=props["color"],
+            edgecolor=edge_color,
+            linewidth=linewidth_val,
+            alpha=alpha_val,
+        )
+        ax.add_patch(rect)
+        ax.text(
+            rod,
+            y_pos + 0.15,
+            disk_text,
+            ha="center",
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+            color="white",
+        )
+
+        rod_counts[rod] += 1
+
+    ax.set_xlim(-0.6, 2.6)
+    ax.set_ylim(-0.1, 4.0)
+    ax.set_xticks(rod_positions)
+    ax.set_xticklabels(["A", "B", "C"])
+    ax.set_yticklabels([])
+    ax.set_title(title, fontsize=14)
+    ax.grid(True, linestyle="--", alpha=0.3)
+
+
+def aggregate_saliency_per_disk(saliency_vector, num_disks=3, num_rods=3):
+    """
+    Aggregates a flat saliency vector into a per-disk saliency list.
+
+    Args:
+        saliency_vector (np.array): The flat saliency map from the model.
+        num_disks (int): The number of disks in the puzzle.
+        num_rods (int): The number of rods in the puzzle.
+
+    Returns:
+        list: A list of saliency scores, ordered [small, medium, large].
+    """
+    if len(saliency_vector) != num_disks * num_rods:
+        raise ValueError("Saliency vector length does not match num_disks * num_rods.")
+
+    saliency_per_disk = []
+    # Assumes the input vector is ordered by disk size (small, medium, large)
+    for i in range(num_disks):
+        start_index = i * num_rods
+        end_index = start_index + num_rods
+        disk_saliency = np.sum(np.abs(saliency_vector[start_index:end_index]))
+        saliency_per_disk.append(disk_saliency)
+
+    return saliency_per_disk
+
+
+def visualize_saliency_comparison(saliency_data, state):
+    """
+    Creates and saves a subplot comparing saliency diagrams for each MuZero network.
+
+    Args:
+        saliency_data (dict): A dictionary where keys are network names (e.g., 'policy', 'value')
+                              and values are the raw saliency vectors from the model.
+        state (tuple): The game state for which the saliency was calculated.
+        save_path (str): The file path to save the resulting image (e.g., 'comparison.png').
+    """
+    state_name = "_".join(map(str, state))
+    file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
+    os.makedirs(file_dir, exist_ok=True)
+    net_names = list(saliency_data.keys())
+    num_nets = len(net_names)
+
+    # Create a subplot grid: 1 row, columns equal to the number of networks
+    fig, axes = plt.subplots(
+        1,
+        num_nets,
+        figsize=(5 * num_nets, 5.5),  # Adjust size for readability
+        constrained_layout=True,
+    )
+
+    # If there's only one network, axes is not a list, so we make it one
+    if num_nets == 1:
+        axes = [axes]
+
+    # Iterate through each network's saliency data
+    for i, net_name in enumerate(net_names):
+        raw_saliency_vector = saliency_data[net_name]
+        ax = axes[i]
+
+        # 1. Aggregate the raw saliency vector to get one score per disk
+        saliency_scores = aggregate_saliency_per_disk(raw_saliency_vector)
+
+        # 2. Use the visualization function to draw the hanoi state on the subplot axis
+        visualize_hanoi_state(
+            ax=ax,
+            state=state,
+            title=f"{net_name.capitalize()} Saliency",
+            saliency_per_disk=saliency_scores,
+        )
+
+    # Add a main title to the entire figure
+    fig.suptitle(f"Saliency Map Comparison for State: {state}", fontsize=20, y=1.05)
+
+    # Save the figure
+    save_path = os.path.join(file_dir, f"gradients_hanoi_diagram.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)  # Close the figure to free up memory
+    print(f"Comparison subplot saved to: {save_path}")
+
+
 def set_seed(seed=1):
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -436,4 +603,5 @@ if __name__ == "__main__":
     logging.info(f"Collected features: {feature_maps}")
     save_results(data, timestamp, state)
     visualize_gradients_subgraphs(data, timestamp, state, feature_maps, saliency)
+    visualize_saliency_comparison(saliency_data=saliency, state=state)
     logging.info("Gradient analysis completed and results saved.")

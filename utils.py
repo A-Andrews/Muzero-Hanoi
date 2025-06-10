@@ -9,8 +9,8 @@ def oneHot_encoding(x, n_integers):
     using a separate one-hot encoding for each dimension of x and then
     concatenating all the one-hot representations into a single vector
     Args:
-        x: integer vector for which need one-hot representatio
-        n_integers: number of possible integer values in the entire x-space (i.e., across all x)
+        x: integer vector for which need one-hot representation (the state)
+        n_integers: number of possible integer values in the entire x-space (number of pegs) (i.e., across all x)
     Returns:
         one-hot vector representation of x
     """
