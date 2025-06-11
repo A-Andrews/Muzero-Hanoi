@@ -1,4 +1,5 @@
 import argparse
+import copy
 import logging
 import os
 
@@ -7,11 +8,20 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-# Assuming these are in the same project structure
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
 from utils import oneHot_encoding, setup_logger
+
+
+def get_ablated_network(networks, ablate_policy=False, ablate_value=False):
+    """Return a copy of ``networks`` with selected components reinitialised."""
+    ablated = copy.deepcopy(networks)
+    if ablate_policy:
+        ablated.policy_net.apply(ablated.reset_param)
+    if ablate_value:
+        ablated.value_net.apply(ablated.reset_param)
+    return ablated
 
 
 def play_game(networks, env, start_state, max_game_steps, mcts, permute_feature=None):
@@ -145,46 +155,56 @@ def main():
     ]
     logging.info(f"Using a test set of {len(test_states)} starting states.")
 
-    # --- Run Experiment ---
-    # 1. Establish Baseline Performance
-    logging.info("Step 1: Running baseline evaluation (no permutation)...")
-    baseline_solve_rate = run_evaluation(
-        networks, env, test_states, args.max_game_steps, mcts, permute_feature=None
-    )
-    logging.info(f"Baseline Solve Rate: {baseline_solve_rate:.2%}")
-
-    # 2. Run Permutation for Each Feature
-    importances = {}
     disk_names = ["Small Disk", "Medium Disk", "Large Disk"]
 
-    for i, disk_name in enumerate(disk_names):
-        logging.info(
-            f"Step {i+2}: Running evaluation with '{disk_name}' position permuted..."
+    experiment_networks = {
+        "baseline": networks,
+        "policy_ablated": get_ablated_network(networks, ablate_policy=True),
+        "value_ablated": get_ablated_network(networks, ablate_value=True),
+    }
+
+    results = {}
+    for label, net in experiment_networks.items():
+        logging.info(f"Evaluating {label} network...")
+        base_rate = run_evaluation(
+            net, env, test_states, args.max_game_steps, mcts, permute_feature=None
         )
-        permuted_rate = run_evaluation(
-            networks, env, test_states, args.max_game_steps, mcts, permute_feature=i
-        )
-        logging.info(f"  -> Solve Rate with {disk_name} permuted: {permuted_rate:.2%}")
-        importances[disk_name] = baseline_solve_rate - permuted_rate
+        logging.info(f"  {label} baseline solve rate: {base_rate:.2%}")
+
+        importances = {}
+        for i, disk_name in enumerate(disk_names):
+            logging.info(f"  Permuting {disk_name} for {label}...")
+            permuted_rate = run_evaluation(
+                net, env, test_states, args.max_game_steps, mcts, permute_feature=i
+            )
+            logging.info(f"    -> Solve Rate: {permuted_rate:.2%}")
+            importances[disk_name] = base_rate - permuted_rate
+        results[label] = importances
 
     # --- Report and Visualize Results ---
     logging.info("\n--- Permutation Importance Results ---")
-    sorted_importances = sorted(
-        importances.items(), key=lambda item: item[1], reverse=True
-    )
-    for name, importance in sorted_importances:
-        logging.info(f"{name}: {importance:.4f}")
+    for label, importances in results.items():
+        logging.info(f"Results for {label}:")
+        for disk, imp in importances.items():
+            logging.info(f"  {disk}: {imp:.4f}")
 
-    # Create and save a bar chart
+    # Create and save a grouped bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
-    names = list(importances.keys())
-    values = list(importances.values())
-    bars = ax.bar(names, values, color=["forestgreen", "royalblue", "firebrick"])
-    ax.bar_label(bars, fmt="%.3f", padding=3)
+    x = np.arange(len(disk_names))
+    width = 0.25
+    labels = list(results.keys())
+    for idx, label in enumerate(labels):
+        offsets = x + (idx - (len(labels) - 1) / 2) * width
+        values = [results[label][d] for d in disk_names]
+        bars = ax.bar(offsets, values, width, label=label.replace("_", " "))
+        ax.bar_label(bars, fmt="%.3f", padding=3)
 
     ax.set_ylabel("Importance (Drop in Solve Rate)")
     ax.set_title("Permutation Importance of Disk Positions for Hanoi Agent")
+    ax.set_xticks(x)
+    ax.set_xticklabels(disk_names)
     ax.set_ylim(bottom=0)
+    ax.legend()
     plt.tight_layout()
 
     save_dir = os.path.join("stats", "Hanoi", args.timestamp)
