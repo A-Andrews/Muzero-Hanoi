@@ -133,11 +133,17 @@ class Muzero:
 
             if n * self.n_ep_x_loop % print_acc == 0:
                 mean_acc = sum(accuracy) / print_acc
-                logging.info(f"| Training Loop: {n} ")
-                logging.info(f"Number of steps:  {mean_acc}")
-                logging.info(f"V loss:  {sum(value_loss)/print_acc}")
-                logging.info(f"rwd loss:  {sum(rwd_loss)/print_acc}")
-                logging.info(f"Pi loss:  {sum(pi_loss)/print_acc} \n")
+                v_loss = sum(value_loss) / print_acc
+                r_loss = sum(rwd_loss) / print_acc
+                p_loss = sum(pi_loss) / print_acc
+                logging.info(
+                    "Loop %s | steps %.3f | V %.3f | rwd %.3f | Pi %.3f",
+                    n,
+                    mean_acc,
+                    v_loss,
+                    r_loss,
+                    p_loss,
+                )
                 tot_accuracy.append(mean_acc)
                 accuracy = []
                 value_loss, rwd_loss, pi_loss = [], [], []
@@ -146,7 +152,6 @@ class Muzero:
 
     def _play_game(self, episode, deterministic=False):
 
-        # Initialise list to store game variables
         episode_state = []
         episode_action = []
         episode_rwd = []

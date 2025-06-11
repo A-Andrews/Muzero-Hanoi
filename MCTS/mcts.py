@@ -69,7 +69,7 @@ class MCTS:
         root_node.expand(prior_prob, h_state, rwd)
 
         for s in range(self.n_simulations):
-            # print('Simulation n. :', s+1)
+
             ## ====  Phase 1 - Select ====
             # Reset initial node to root for each mcts simulation
             node = root_node
@@ -84,7 +84,6 @@ class MCTS:
                 self.latent_actions.append(
                     torch.tensor([node.move], dtype=torch.long, device=self.dev)
                 )
-                # print('Move: ', node.move,"\n")
 
             ## ==== Phase 2 - Expand leaf - based on parent state and action associated to that (best) leaf ====
             h_state = torch.from_numpy(node.parent.h_state).to(
@@ -104,8 +103,7 @@ class MCTS:
                 h_state, action
             )  # compute latent state for best action (child)
 
-            # node.expand(prior_prob, h_state, rwd) #NOTE: I don't understand prior prob here, shouldn't come from a pi_probs ?
-            node.expand(pi_probs, h_state, rwd)  # NOTE: Trial using pi_probs!!!
+            node.expand(pi_probs, h_state, rwd)
 
             ## ==== Phase 3 - Backup on leaf node ====
             node.backup(value, self, self.min_max_stats)

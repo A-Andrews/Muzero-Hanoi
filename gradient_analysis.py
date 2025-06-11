@@ -550,11 +550,10 @@ def visualize_saliency_comparison(saliency_data, state, file_dir):
         f"Saliency Map for State: {state}, Action: {action_str}", fontsize=20, y=1.05
     )
 
-    # Save the figure
-    save_path = os.path.join(file_dir, f"gradients_hanoi_diagram.png")
+    save_path = os.path.join(file_dir, "gradients_hanoi_diagram.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)  # Close the figure to free up memory
-    print(f"Comparison subplot saved to: {save_path}")
+    plt.close(fig)
+    logging.info("Comparison subplot saved to: %s", save_path)
 
 
 def set_seed(seed=1):
