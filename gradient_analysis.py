@@ -1,4 +1,5 @@
 import argparse
+import copy
 import logging
 import os
 
@@ -32,6 +33,49 @@ def save_results(data, file_dir):
         file_path = os.path.join(file_dir, f"{network}_gradients.pt")
         torch.save(gradients, file_path)
         logging.info(f"Saved gradients for {network} to {file_path}")
+
+
+def ablate_networks(networks, policy=False, value=False):
+    """Return a copy of ``networks`` with selected heads reinitialised."""
+    net_copy = copy.deepcopy(networks)
+    if policy:
+        net_copy.policy_net.apply(net_copy.reset_param)
+    if value:
+        net_copy.value_net.apply(net_copy.reset_param)
+    return net_copy
+
+
+def register_feature_hooks(networks, feature_maps):
+    networks.representation_net[0].register_forward_hook(
+        get_activation("representation_linear1", feature_maps)
+    )
+    networks.representation_net[2].register_forward_hook(
+        get_activation("representation_linear2", feature_maps)
+    )
+    networks.dynamic_net[0].register_forward_hook(
+        get_activation("dynamic_linear1", feature_maps)
+    )
+    networks.dynamic_net[2].register_forward_hook(
+        get_activation("dynamic_linear2", feature_maps)
+    )
+    networks.rwd_net[0].register_forward_hook(
+        get_activation("reward_linear1", feature_maps)
+    )
+    networks.rwd_net[2].register_forward_hook(
+        get_activation("reward_linear2", feature_maps)
+    )
+    networks.policy_net[0].register_forward_hook(
+        get_activation("policy_linear1", feature_maps)
+    )
+    networks.policy_net[2].register_forward_hook(
+        get_activation("policy_linear2", feature_maps)
+    )
+    networks.value_net[0].register_forward_hook(
+        get_activation("value_linear1", feature_maps)
+    )
+    networks.value_net[2].register_forward_hook(
+        get_activation("value_linear2", feature_maps)
+    )
 
 
 def visualize_gradients_subgraphs(
@@ -542,6 +586,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--action", type=str, default="0", help="Action to take in the environment"
     )
+    parser.add_argument(
+        "--compare_ablations",
+        type=bool,
+        default=True,
+        help="Also compute gradients for policy and value ablated networks",
+    )
     args = parser.parse_args()
     N = args.N
     max_steps = args.max_steps
@@ -574,48 +624,35 @@ if __name__ == "__main__":
     networks.optimiser.load_state_dict(model_dict["Net_optim"])
 
     feature_maps = {}
-    networks.representation_net[0].register_forward_hook(
-        get_activation("representation_linear1", feature_maps)
-    )
-    networks.representation_net[2].register_forward_hook(
-        get_activation("representation_linear2", feature_maps)
-    )
-    networks.dynamic_net[0].register_forward_hook(
-        get_activation("dynamic_linear1", feature_maps)
-    )
-    networks.dynamic_net[2].register_forward_hook(
-        get_activation("dynamic_linear2", feature_maps)
-    )
-    networks.rwd_net[0].register_forward_hook(
-        get_activation("reward_linear1", feature_maps)
-    )
-    networks.rwd_net[2].register_forward_hook(
-        get_activation("reward_linear2", feature_maps)
-    )
-    networks.policy_net[0].register_forward_hook(
-        get_activation("policy_linear1", feature_maps)
-    )
-    networks.policy_net[2].register_forward_hook(
-        get_activation("policy_linear2", feature_maps)
-    )
-    networks.value_net[0].register_forward_hook(
-        get_activation("value_linear1", feature_maps)
-    )
-    networks.value_net[2].register_forward_hook(
-        get_activation("value_linear2", feature_maps)
-    )
+    register_feature_hooks(networks, feature_maps)
+    results = []
 
     data = get_results(networks, state, action)
     saliency = compute_saliency(state, N, networks, action)
-    file_dir = os.path.join(
+    results.append(("baseline", feature_maps, data, saliency))
+
+    if args.compare_ablations:
+        ablation_settings = {
+            "policy_ablated": {"policy": True},
+            "value_ablated": {"value": True},
+        }
+        for name, opts in ablation_settings.items():
+            ab_net = ablate_networks(networks, **opts)
+            fmap_ab = {}
+            register_feature_hooks(ab_net, fmap_ab)
+            data_ab = get_results(ab_net, state, action)
+            saliency_ab = compute_saliency(state, N, ab_net, action)
+            results.append((name, fmap_ab, data_ab, saliency_ab))
+
+    base_dir = os.path.join(
         "stats", "Hanoi", timestamp, "gradients", f"{args.state}-{args.action}"
     )
-    os.makedirs(file_dir, exist_ok=True)
+    for label, fmap, data_dict, sal in results:
+        file_dir = os.path.join(base_dir, label)
+        os.makedirs(file_dir, exist_ok=True)
+        logging.info(f"Collected features for {label}: {fmap}")
+        save_results(data_dict, file_dir)
+        visualize_gradients_subgraphs(data_dict, args.state, file_dir, fmap, sal)
+        visualize_saliency_comparison(saliency_data=sal, state=state, file_dir=file_dir)
 
-    logging.info(f"Collected features: {feature_maps}")
-    save_results(data, file_dir)
-    visualize_gradients_subgraphs(data, args.state, file_dir, feature_maps, saliency)
-    visualize_saliency_comparison(
-        saliency_data=saliency, state=state, file_dir=file_dir
-    )
     logging.info("Gradient analysis completed and results saved.")
