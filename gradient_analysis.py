@@ -26,10 +26,7 @@ def get_activation(name, fmap_dict):
     return hook
 
 
-def save_results(data, timestamp, state):
-    state_name = "_".join(map(str, state))
-    file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
-    os.makedirs(file_dir, exist_ok=True)
+def save_results(data, file_dir):
 
     for network, gradients in data.items():
         file_path = os.path.join(file_dir, f"{network}_gradients.pt")
@@ -39,8 +36,8 @@ def save_results(data, timestamp, state):
 
 def visualize_gradients_subgraphs(
     gradients_dict,
-    timestamp,
-    state,
+    state_name,
+    file_dir,
     feature_maps_dict=None,
     input_sensitivities_dict=None,
 ):
@@ -56,9 +53,6 @@ def visualize_gradients_subgraphs(
     )
     # Use seaborn's colorblind palette
     cb_colors = sns.color_palette("colorblind")
-    state_name = "_".join(map(str, state))
-    file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
-    os.makedirs(file_dir, exist_ok=True)
     num_nets = len(gradients_dict)
     net_names = list(gradients_dict.keys())
 
@@ -217,8 +211,9 @@ def visualize_gradients_subgraphs(
         axes[net_idx, 4].set_xlabel("Input Feature")
         axes[net_idx, 4].set_ylabel("|∂output/∂input|")
 
+    action_str = get_action_str(action)
     fig.suptitle(
-        f"MuZero Gradient & Feature Diagnostics for State: {state_name}",
+        f"Gradient Diagnostics for State: {state_name}, Action: {action_str}",
         fontsize=28,
         y=1.03,
     )
@@ -231,14 +226,14 @@ def visualize_gradients_subgraphs(
     plt.close(fig)
 
 
-def get_results(env, networks, mcts, state):
+def get_results(networks, state, action):
     """
     Run the model with a given state and collect results.
     """
     data = {}
     # Set an initial state
     oneH_c_state = torch.tensor(
-        oneHot_encoding(state, n_integers=N), dtype=torch.float32
+        oneHot_encoding(state, n_integers=env.n_pegs), dtype=torch.float32
     ).unsqueeze(0)
 
     # Representation
@@ -250,7 +245,7 @@ def get_results(env, networks, mcts, state):
     pi_probs = F.softmax(pi_logits, dim=-1)
 
     dummy_action = torch.zeros(1, networks.num_actions, device=networks.dev)
-    dummy_action[0, 0] = 1.0  # Set first action to 1
+    dummy_action[0, action] = 1.0
 
     # Use dynamics network
     next_h_state, next_rwd = networks.dynamics(h_state, dummy_action)
@@ -298,15 +293,28 @@ def get_results(env, networks, mcts, state):
     return data
 
 
-def compute_saliency(state, N, networks):
+def get_action_str(action_int):
+    """Converts an action integer to a human-readable string."""
+    action_map = {
+        0: "A -> B",
+        1: "A -> C",
+        2: "B -> A",
+        3: "B -> C",
+        4: "C -> A",
+        5: "C -> B",
+    }
+    return action_map.get(action_int, f"Action {action_int}")
+
+
+def compute_saliency(state, N, networks, action):
     """
     Compute per-head saliency by re-running the minimal forward+backward
     for each network component.
     """
     # Precompute numpy state and dummy action
-    state_np = oneHot_encoding(state, n_integers=N)
+    state_np = oneHot_encoding(state, n_integers=env.n_pegs)
     dummy_action = torch.zeros(1, networks.num_actions, device=networks.dev)
-    dummy_action[0, 0] = 1.0
+    dummy_action[0, action] = 1.0
 
     # Define each head as a function mapping input→scalar
     heads = {
@@ -451,7 +459,7 @@ def aggregate_saliency_per_disk(saliency_vector, num_disks=3, num_rods=3):
     return saliency_per_disk
 
 
-def visualize_saliency_comparison(saliency_data, state):
+def visualize_saliency_comparison(saliency_data, state, file_dir):
     """
     Creates and saves a subplot comparing saliency diagrams for each MuZero network.
 
@@ -461,11 +469,9 @@ def visualize_saliency_comparison(saliency_data, state):
         state (tuple): The game state for which the saliency was calculated.
         save_path (str): The file path to save the resulting image (e.g., 'comparison.png').
     """
-    state_name = "_".join(map(str, state))
-    file_dir = os.path.join("stats", "Hanoi", timestamp, "gradients", state_name)
-    os.makedirs(file_dir, exist_ok=True)
     net_names = list(saliency_data.keys())
     num_nets = len(net_names)
+    action_str = get_action_str(action)
 
     # Create a subplot grid: 1 row, columns equal to the number of networks
     fig, axes = plt.subplots(
@@ -496,7 +502,9 @@ def visualize_saliency_comparison(saliency_data, state):
         )
 
     # Add a main title to the entire figure
-    fig.suptitle(f"Saliency Map Comparison for State: {state}", fontsize=20, y=1.05)
+    fig.suptitle(
+        f"Saliency Map for State: {state}, Action: {action_str}", fontsize=20, y=1.05
+    )
 
     # Save the figure
     save_path = os.path.join(file_dir, f"gradients_hanoi_diagram.png")
@@ -540,7 +548,7 @@ if __name__ == "__main__":
     timestamp = args.timestamp
     seed = args.seed
     state = tuple(map(int, args.state.split("_")))
-    action = args.action
+    action = int(args.action)
 
     env = TowersOfHanoi(N=N, max_steps=max_steps)
     s_space_size = env.oneH_s_size
@@ -597,11 +605,17 @@ if __name__ == "__main__":
         get_activation("value_linear2", feature_maps)
     )
 
-    data = get_results(env, networks, mcts, state)
-    saliency = compute_saliency(state, N, networks)
+    data = get_results(networks, state, action)
+    saliency = compute_saliency(state, N, networks, action)
+    file_dir = os.path.join(
+        "stats", "Hanoi", timestamp, "gradients", f"{args.state}-{args.action}"
+    )
+    os.makedirs(file_dir, exist_ok=True)
 
     logging.info(f"Collected features: {feature_maps}")
-    save_results(data, timestamp, state)
-    visualize_gradients_subgraphs(data, timestamp, state, feature_maps, saliency)
-    visualize_saliency_comparison(saliency_data=saliency, state=state)
+    save_results(data, file_dir)
+    visualize_gradients_subgraphs(data, args.state, file_dir, feature_maps, saliency)
+    visualize_saliency_comparison(
+        saliency_data=saliency, state=state, file_dir=file_dir
+    )
     logging.info("Gradient analysis completed and results saved.")
