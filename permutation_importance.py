@@ -32,10 +32,12 @@ def play_game(networks, env, start_state, max_game_steps, mcts, permute_feature=
         bool: True if the puzzle was solved, False otherwise.
     """
     env.reset()
-    env.state = start_state
+
+    env.c_state = start_state
+    env.oneH_c_state = oneHot_encoding(env.c_state, n_integers=env.n_pegs)
 
     for _ in range(max_game_steps):
-        true_state = env.state
+        true_state = env.c_state
         state_to_feed_model = true_state
 
         # --- PERMUTATION INJECTION POINT ---
@@ -54,12 +56,14 @@ def play_game(networks, env, start_state, max_game_steps, mcts, permute_feature=
         )
 
         # Apply the chosen action to the REAL environment
-        _, _, done, info = env.step(action)
+        _, reward, done, _ = env.step(action)
 
+        if reward == 100:
+            return True
         if done:
-            return info
+            return False
 
-    return False  # Failed to solve within max steps
+    return False
 
 
 def run_evaluation(
