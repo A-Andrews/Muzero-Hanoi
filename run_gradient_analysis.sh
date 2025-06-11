@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=long
-#SBATCH --job-name=muzero_hanoi
+#SBATCH --job-name=gradient_analysis
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -14,6 +14,5 @@ echo "Started at: "`date`
 echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
-python3 training_main.py "$@"
 
-echo "Done!"
+python3 gradient_analysis.py "$@"
