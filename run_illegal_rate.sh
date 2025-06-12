@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=short
-#SBATCH --job-name=gradient_analysis
+#SBATCH --job-name=illegal_rate_analysis
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
@@ -15,4 +15,4 @@ echo "------------------------------------------------"
 module load Python/3.11.3-GCCcore-12.3.0
 source ".venv/bin/activate"
 
-python3 gradient_analysis.py "$@"
+python3 illegal_move_rate_comparison.py "$@"

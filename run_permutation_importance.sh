@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=long
+#SBATCH --partition=short
 #SBATCH --job-name=permutation_importance
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
