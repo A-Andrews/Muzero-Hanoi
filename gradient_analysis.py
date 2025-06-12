@@ -9,6 +9,7 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn.functional as F
+from matplotlib import colors as mcolors
 
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
@@ -435,10 +436,14 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
         y_pos = 0.3 + rod_counts[rod] * 0.4
         props = disk_visual_props[disk_name]
 
+        norm_saliency = 0.0
         alpha_val, linewidth_val, edge_color = 1.0, 1.5, "black"
+        face_color = props["color"]
         if saliency_per_disk:
             norm_saliency = normalized_saliencies[disk_name]
-            alpha_val = 0.5 + norm_saliency * 0.5
+            intensity = 0.5 + norm_saliency * 0.5
+            base_col = np.array(mcolors.to_rgb(props["color"]))
+            face_colour = tuple(intensity * base_col + (1 - intensity) * np.ones(3))
             linewidth_val = 1.5 + norm_saliency * 3.5
             if norm_saliency > 0.95:
                 edge_color = "gold"
@@ -449,7 +454,7 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
             (rod - props["width"] / 2, y_pos),
             props["width"],
             0.3,
-            facecolor=props["color"],
+            facecolor=face_colour,
             edgecolor=edge_color,
             linewidth=linewidth_val,
             alpha=alpha_val,
