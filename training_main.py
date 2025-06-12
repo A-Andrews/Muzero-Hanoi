@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import time
+from dataclasses import dataclass
 
 import gym
 import numpy as np
@@ -10,6 +11,29 @@ import torch
 from env.hanoi import TowersOfHanoi
 from Muzero import Muzero
 from utils import setup_logger
+
+
+@dataclass
+class TrainingConfig:
+    """Configuration options for training."""
+
+    env: str = "Hanoi"
+    training_loops: int = 5000
+    min_replay_size: int = 5000
+    dirichlet_alpha: float = 0.25
+    n_ep_x_loop: int = 1
+    n_update_x_loop: int = 1
+    unroll_n_steps: int = 5
+    TD_return: bool = True
+    n_TD_step: int = 10
+    buffer_size: int = 50000
+    priority_replay: bool = True
+    batch_s: int = 256
+    discount: float = 0.8
+    n_mcts_simulations: int = 25
+    lr: float = 0.002
+    seed: int = 1
+    profile: bool = False
 
 
 def get_env(env_name):
@@ -106,70 +130,19 @@ def log_command_line(
 
 if __name__ == "__main__":
 
-    set_seed(1)
-
     ## ======= Select the environment ========
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--env",
-        type=str,
-        default="Hanoi",
-        help="Environment to train on (h for Hanoi, c for CartPole)",
-    )
-    parser.add_argument(
-        "--training_loops", type=int, default=5000, help="Number of training loops"
-    )
-    parser.add_argument(
-        "--min_replay_size", type=int, default=5000, help="Minimum replay size"
-    )
-    parser.add_argument(
-        "--dirichlet_alpha",
-        type=float,
-        default=0.25,
-        help="Dirichlet alpha for exploration",
-    )
-    parser.add_argument(
-        "--n_ep_x_loop", type=int, default=1, help="Number of episodes per loop"
-    )
-    parser.add_argument(
-        "--n_update_x_loop", type=int, default=1, help="Number of updates per loop"
-    )
-    parser.add_argument(
-        "--unroll_n_steps", type=int, default=5, help="Number of unroll steps"
-    )
-    parser.add_argument("--TD_return", type=bool, default=True, help="Use TD return")
-    parser.add_argument("--n_TD_step", type=int, default=10, help="Number of TD steps")
-    parser.add_argument("--buffer_size", type=int, default=50000, help="Buffer size")
-    parser.add_argument(
-        "--priority_replay", type=bool, default=True, help="Use priority replay"
-    )
-    parser.add_argument("--batch_s", type=int, default=256, help="Batch size")
-    parser.add_argument("--discount", type=float, default=0.8, help="Discount factor")
-    parser.add_argument(
-        "--n_mcts_simulations", type=int, default=25, help="Number of MCTS simulations"
-    )
-    parser.add_argument("--lr", type=float, default=0.002, help="Learning rate")
-    parser.add_argument(
-        "--seed", type=int, default=1, help="Random seed for reproducibility"
-    )
-    parser.add_argument("--profile", type=bool, default=False, help="Enable profiling")
-    args = parser.parse_args()
-    env_name = args.env
-    training_loops = args.training_loops
-    min_replay_size = args.min_replay_size
-    dirichlet_alpha = args.dirichlet_alpha
-    n_ep_x_loop = args.n_ep_x_loop
-    n_update_x_loop = args.n_update_x_loop
-    unroll_n_steps = args.unroll_n_steps
-    TD_return = args.TD_return
-    n_TD_step = args.n_TD_step
-    buffer_size = args.buffer_size
-    priority_replay = args.priority_replay
-    batch_s = args.batch_s
-    discount = args.discount
-    n_mcts_simulations = args.n_mcts_simulations
-    lr = args.lr
-    s = args.seed
+    for field in TrainingConfig.__dataclass_fields__.values():
+        parser.add_argument(
+            f"--{field.name}",
+            type=type(field.default),
+            default=field.default,
+            help=field.metadata.get("help", field.name),
+        )
+
+    config = TrainingConfig(**vars(parser.parse_args()))
+
+    set_seed(config.seed)
 
     ## ========= Useful variables: ===========
 
@@ -183,24 +156,24 @@ if __name__ == "__main__":
         dev = "cpu"
 
     ## ========= Initialise env ========
-    env, s_space_size, n_action, max_steps, n_disks = get_env(env_name)
+    env, s_space_size, n_action, max_steps, n_disks = get_env(config.env)
 
     ## ====== Log command line =====
 
     command_line = log_command_line(
-        env_name,
-        training_loops,
-        min_replay_size,
-        lr,
-        discount,
-        n_mcts_simulations,
-        batch_s,
-        TD_return,
-        priority_replay,
+        config.env,
+        config.training_loops,
+        config.min_replay_size,
+        config.lr,
+        config.discount,
+        config.n_mcts_simulations,
+        config.batch_s,
+        config.TD_return,
+        config.priority_replay,
         dev,
-        dirichlet_alpha,
-        buffer_size,
-        n_TD_step,
+        config.dirichlet_alpha,
+        config.buffer_size,
+        config.n_TD_step,
         n_disks=n_disks,
     )
 
@@ -209,24 +182,24 @@ if __name__ == "__main__":
         env=env,
         s_space_size=s_space_size,
         n_action=n_action,
-        discount=discount,
-        dirichlet_alpha=dirichlet_alpha,
-        n_mcts_simulations=n_mcts_simulations,
-        unroll_n_steps=unroll_n_steps,
-        batch_s=batch_s,
-        TD_return=TD_return,
-        n_TD_step=n_TD_step,
-        lr=lr,
-        buffer_size=buffer_size,
-        priority_replay=priority_replay,
+        discount=config.discount,
+        dirichlet_alpha=config.dirichlet_alpha,
+        n_mcts_simulations=config.n_mcts_simulations,
+        unroll_n_steps=config.unroll_n_steps,
+        batch_s=config.batch_s,
+        TD_return=config.TD_return,
+        n_TD_step=config.n_TD_step,
+        lr=config.lr,
+        buffer_size=config.buffer_size,
+        priority_replay=config.priority_replay,
         device=dev,
-        n_ep_x_loop=n_ep_x_loop,
-        n_update_x_loop=n_update_x_loop,
+        n_ep_x_loop=config.n_ep_x_loop,
+        n_update_x_loop=config.n_update_x_loop,
     )
 
     ## ======== Run training ==========
-    tot_acc = muzero.training_loop(training_loops, min_replay_size)
+    tot_acc = muzero.training_loop(config.training_loops, config.min_replay_size)
 
     save_results(
-        env_name, command_line, {"total_accuracy": tot_acc}, muzero, int(time.time())
+        config.env, command_line, {"total_accuracy": tot_acc}, muzero, int(time.time())
     )
