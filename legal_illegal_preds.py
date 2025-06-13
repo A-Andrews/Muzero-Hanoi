@@ -25,15 +25,13 @@ def ablate_network(networks, ablate_policy=False, ablate_value=False):
 
 def evaluate_network(env, mcts, networks, episodes, device):
     """Collect predicted rewards and values for legal and illegal moves."""
-    results = {
-        "legal_reward": [],
-        "illegal_reward": [],
-        "legal_value": [],
-        "illegal_value": [],
-    }
+    reward_diffs = []
+    value_diffs = []
     for _ in range(episodes):
         state = env.random_reset()
         done = False
+        legal_rewards, illegal_rewards = [], []
+        legal_values, illegal_values = [], []
         while not done:
             action, _, _ = mcts.run_mcts(
                 state, networks, temperature=0.0, deterministic=False
@@ -51,40 +49,51 @@ def evaluate_network(env, mcts, networks, episodes, device):
             )
             next_state, _, done, illegal = env.step(action)
             if illegal:
-                results["illegal_reward"].append(pred_reward)
-                results["illegal_value"].append(pred_value)
+                illegal_rewards.append(pred_reward)
+                illegal_values.append(pred_value)
             else:
-                results["legal_reward"].append(pred_reward)
-                results["legal_value"].append(pred_value)
+                legal_rewards.append(pred_reward)
+                legal_values.append(pred_value)
             state = next_state
-    for key in results:
-        if results[key]:
-            results[key] = float(np.mean(results[key]))
-        else:
-            results[key] = 0.0
-    return results
+        legal_reward = np.mean(legal_rewards) if legal_rewards else 0.0
+        illegal_reward = np.mean(illegal_rewards) if illegal_rewards else 0.0
+        legal_value = np.mean(legal_values) if legal_values else 0.0
+        illegal_value = np.mean(illegal_values) if illegal_values else 0.0
+
+        reward_diffs.append(legal_reward - illegal_reward)
+        value_diffs.append(legal_value - illegal_value)
+
+    return {
+        "reward_diff_mean": float(np.mean(reward_diffs)) if reward_diffs else 0.0,
+        "reward_diff_std": float(np.std(reward_diffs)) if reward_diffs else 0.0,
+        "value_diff_mean": float(np.mean(value_diffs)) if value_diffs else 0.0,
+        "value_diff_std": float(np.std(value_diffs)) if value_diffs else 0.0,
+    }
 
 
 def plot_results(results, save_path):
     labels = list(results.keys())
-    reward_diffs = [
-        results[l]["legal_reward"] - results[l]["illegal_reward"] for l in labels
-    ]
-    value_diffs = [
-        results[l]["legal_value"] - results[l]["illegal_value"] for l in labels
-    ]
+    reward_means = [results[l]["reward_diff_mean"] for l in labels]
+    reward_stds = [results[l]["reward_diff_std"] for l in labels]
+    value_means = [results[l]["value_diff_mean"] for l in labels]
+    value_stds = [results[l]["value_diff_std"] for l in labels]
 
     x = np.arange(len(labels))
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     bars1 = axs[0].bar(
-        x, reward_diffs, color=["#1f77b4", "#ff7f0e", "#2ca02c"], edgecolor="black"
+        x,
+        reward_means,
+        yerr=reward_stds,
+        capsize=5,
+        color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+        edgecolor="black",
     )
     axs[0].set_ylabel("Predicted Reward Difference")
     axs[0].set_title("Legal - Illegal")
     axs[0].set_xticks(x)
     axs[0].set_xticklabels(labels, rotation=45)
-    for bar, val in zip(bars1, reward_diffs):
+    for bar, val in zip(bars1, reward_means):
         axs[0].text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height(),
@@ -94,13 +103,18 @@ def plot_results(results, save_path):
         )
 
     bars2 = axs[1].bar(
-        x, value_diffs, color=["#1f77b4", "#ff7f0e", "#2ca02c"], edgecolor="black"
+        x,
+        value_means,
+        yerr=value_stds,
+        capsize=5,
+        color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+        edgecolor="black",
     )
     axs[1].set_ylabel("Predicted Value Difference")
     axs[1].set_title("Legal - Illegal")
     axs[1].set_xticks(x)
     axs[1].set_xticklabels(labels, rotation=45)
-    for bar, val in zip(bars2, value_diffs):
+    for bar, val in zip(bars2, value_means):
         axs[1].text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height(),
