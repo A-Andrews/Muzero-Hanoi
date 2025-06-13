@@ -40,20 +40,22 @@ def evaluate_network(env, mcts, networks, episodes, device):
                 0
             )
             h_state = networks.represent(state_t)
-            action_t = torch.tensor([action], dtype=torch.long, device=device)
-            action_oh = torch.nn.functional.one_hot(
-                action_t, num_classes=networks.num_actions
-            ).float()
-            _, pred_reward, _, pred_value = networks.recurrent_inference(
-                h_state, action_oh
-            )
-            next_state, _, done, illegal = env.step(action)
-            if illegal:
-                illegal_rewards.append(pred_reward)
-                illegal_values.append(pred_value)
-            else:
-                legal_rewards.append(pred_reward)
-                legal_values.append(pred_value)
+            for a in range(networks.num_actions):
+                action_t = torch.tensor([a], dtype=torch.long, device=device)
+                action_oh = torch.nn.functional.one_hot(
+                    action_t, num_classes=networks.num_actions
+                ).float()
+                _, pred_reward, _, pred_value = networks.recurrent_inference(
+                    h_state, action_oh
+                )
+                illegal = not env._move_allowed(env.moves[a])
+                if illegal:
+                    illegal_rewards.append(pred_reward)
+                    illegal_values.append(pred_value)
+                else:
+                    legal_rewards.append(pred_reward)
+                    legal_values.append(pred_value)
+            next_state, _, done, _ = env.step(action)
             state = next_state
         legal_reward = np.mean(legal_rewards) if legal_rewards else 0.0
         illegal_reward = np.mean(illegal_rewards) if illegal_rewards else 0.0
