@@ -10,7 +10,7 @@ import torch
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
-from utils import setup_logger
+from utils import PLOT_COLORS, set_plot_style, setup_logger
 
 
 def ablate_network(networks, ablate_policy=False, ablate_value=False):
@@ -88,7 +88,7 @@ def plot_results(results, save_path):
         reward_means,
         yerr=reward_stds,
         capsize=5,
-        color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+        color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
         edgecolor="black",
     )
     axs[0].set_ylabel("Predicted Reward Difference")
@@ -109,7 +109,7 @@ def plot_results(results, save_path):
         value_means,
         yerr=value_stds,
         capsize=5,
-        color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+        color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
         edgecolor="black",
     )
     axs[1].set_ylabel("Predicted Value Difference")
@@ -132,6 +132,7 @@ def plot_results(results, save_path):
 
 
 def main(timestamp, episodes):
+    set_plot_style()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = TowersOfHanoi(N=3, max_steps=200)
     mcts = MCTS(

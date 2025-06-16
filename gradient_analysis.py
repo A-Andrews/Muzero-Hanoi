@@ -14,7 +14,7 @@ from matplotlib import colors as mcolors
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
-from utils import oneHot_encoding, setup_logger
+from utils import PLOT_COLORS, oneHot_encoding, set_plot_style, setup_logger
 
 # import model
 # run model with incorrect state
@@ -608,6 +608,7 @@ if __name__ == "__main__":
     s_space_size = env.oneH_s_size
 
     set_seed(seed)
+    set_plot_style()
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     command_line = (

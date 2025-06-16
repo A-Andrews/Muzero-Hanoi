@@ -11,7 +11,7 @@ from tqdm import tqdm
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
-from utils import oneHot_encoding, setup_logger
+from utils import PLOT_COLORS, oneHot_encoding, set_plot_style, setup_logger
 
 
 def play_game(networks, env, start_state, max_game_steps, mcts, noise_std=0.0):
@@ -75,6 +75,7 @@ def main():
     args = parser.parse_args()
 
     setup_logger(args.seed)
+    set_plot_style()
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -123,7 +124,7 @@ def main():
             )
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(args.noise_stds, solve_rates, marker="o", color="#1f77b4")
+    ax.plot(args.noise_stds, solve_rates, marker="o", color=PLOT_COLORS[0])
     ax.set_xlabel("Noise Std Dev")
     ax.set_ylabel("Solve Rate")
     ax.set_title("Performance vs Injected Noise")

@@ -10,7 +10,7 @@ import torch
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
-from utils import setup_logger
+from utils import PLOT_COLORS, set_plot_style, setup_logger
 
 
 def ablate_networks(networks, ablate_policy=False, ablate_value=False):
@@ -50,6 +50,7 @@ def illegal_move_rate(env, networks, mcts, episodes=100, temperature=0.0):
 
 
 def main(timestamp, episodes):
+    set_plot_style()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = TowersOfHanoi(N=3, max_steps=200)
     mcts = MCTS(
@@ -102,7 +103,7 @@ def main(timestamp, episodes):
         np.array(rates) * 100,
         yerr=np.array(stds) * 100,
         capsize=5,
-        color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+        color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
         edgecolor="black",
     )
     ax.set_ylabel("Illegal move rate (%)")
