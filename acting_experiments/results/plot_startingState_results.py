@@ -1,6 +1,10 @@
 import argparse
 import os
+import sys
 
+sys.path.append("/well/costa/users/zqa082/Muzero-Hanoi")
+
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -38,7 +42,12 @@ labels = [label_1, label_2, label_3, lable_4, label_5]
 
 set_plot_style()
 
-col_colors = PLOT_COLORS[:5]
+font_s = 7
+mpl.rc("font", size=font_s)
+mpl.rcParams["xtick.labelsize"] = font_s
+mpl.rcParams["ytick.labelsize"] = font_s
+
+col_colors = PLOT_COLORS[: len(labels)]
 
 fig, axs = plt.subplots(
     nrows=len(directories),
@@ -75,15 +84,18 @@ for d in directories:
         axs[e, i].spines["top"].set_visible(False)
         if i == 0:
             if e == 0:
-                axs[e, i].set_ylabel("Far\nError")
+                axs[e, i].set_ylabel("Far\nError", fontsize=font_s)
             elif e == 1:
-                axs[e, i].set_ylabel("Mid\nError")
+                axs[e, i].set_ylabel("Mid\nError", fontsize=font_s)
             elif e == 2:
-                axs[e, i].set_ylabel("Close\nError")
+                axs[e, i].set_ylabel("Close\nError", fontsize=font_s)
         if e == 0:
-            axs[e, i].set_title(labels[i])
+            axs[e, i].set_title(labels[i], fontsize=font_s)
         if e == len(directories) - 1:
-            axs[e, i].set_xlabel("N. simulations every real step \n (planning time)")
+            axs[e, i].set_xlabel(
+                "N. simulations every real step \n (planning time)",
+                fontsize=font_s,
+            )
         i += 1
     e += 1
 
@@ -129,7 +141,6 @@ for e, d in enumerate(directories):
                 ha="center",
                 va="bottom",
                 color="red",
-                fontsize=14,
                 fontweight="bold",
             )
         else:
