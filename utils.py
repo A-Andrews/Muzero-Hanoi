@@ -1,6 +1,8 @@
 import logging
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import torch
 
 
@@ -102,3 +104,27 @@ def setup_logger(seed):
     logging.debug(f"Pytorch version: {torch.__version__}")
     if seed is not None:
         logging.info(f"Seed: {seed}")
+
+
+# Colourblind-friendly palette for all plots
+PLOT_COLORS = sns.color_palette("colorblind").as_hex()
+
+
+def set_plot_style() -> None:
+    """Apply consistent, publication-quality styling to all plots."""
+    sns.set_theme(style="white", palette=PLOT_COLORS, context="paper")
+    sns.despine()
+    plt.rcParams.update(
+        {
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.serif": ["Computer Modern Roman", "Times New Roman", "DejaVu Serif"],
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 11,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "legend.fontsize": 9,
+            "axes.grid": False,
+        }
+    )

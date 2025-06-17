@@ -1,11 +1,11 @@
 import argparse
 import os
-import time
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+
+from utils import PLOT_COLORS, set_plot_style
 
 parser = argparse.ArgumentParser(description="Plotting Results")
 parser.add_argument(
@@ -36,20 +36,9 @@ label_5 = "ResetLatentVal_ResetLatentRwd"
 
 labels = [label_1, label_2, label_3, lable_4, label_5]
 
-col_colors = [
-    "#1f77b4",  # blue
-    "#ff7f0e",  # orange
-    "#2ca02c",  # green
-    "#d62728",  # red
-    "#9467bd",  # purple
-]
+set_plot_style()
 
-# Init figure
-font_s = 7
-mpl.rc("font", size=font_s)
-plt.rcParams["font.family"] = "helvetica"
-mpl.rcParams["xtick.labelsize"] = font_s
-mpl.rcParams["ytick.labelsize"] = font_s
+col_colors = PLOT_COLORS[:5]
 
 fig, axs = plt.subplots(
     nrows=len(directories),
@@ -92,7 +81,7 @@ for d in directories:
             elif e == 2:
                 axs[e, i].set_ylabel("Close\nError")
         if e == 0:
-            axs[e, i].set_title(labels[i], fontsize=font_s)
+            axs[e, i].set_title(labels[i])
         if e == len(directories) - 1:
             axs[e, i].set_xlabel("N. simulations every real step \n (planning time)")
         i += 1
@@ -125,7 +114,7 @@ for e, d in enumerate(directories):
 
     bars = axs_bar[e].bar(labels, times_to_reach, color=col_colors, edgecolor="black")
     axs_bar[e].set_title(["Far", "Mid", "Close"][e])
-    axs_bar[e].set_ylabel("Simulations to\nreach MuZero mean error")
+    axs_bar[e].set_ylabel("Simulations to\nreach MuZero \n mean error")
     axs_bar[e].tick_params(axis="x", rotation=45)
 
     # Add hatching and/or asterisks for "never reached"

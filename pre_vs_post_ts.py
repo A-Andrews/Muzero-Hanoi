@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
+from utils import PLOT_COLORS, set_plot_style, setup_logger
 
 
 def ablate_networks(networks, ablate_policy=False, ablate_value=False):
@@ -65,6 +66,7 @@ def main():
     args = parser.parse_args()
 
     setup_logger(args.seed)
+    set_plot_style()
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 

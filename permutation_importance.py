@@ -11,7 +11,7 @@ from tqdm import tqdm
 from env.hanoi import TowersOfHanoi
 from MCTS.mcts import MCTS
 from networks import MuZeroNet
-from utils import oneHot_encoding, setup_logger
+from utils import PLOT_COLORS, oneHot_encoding, set_plot_style, setup_logger
 
 
 def get_ablated_network(networks, ablate_policy=False, ablate_value=False):
@@ -114,6 +114,7 @@ def main():
 
     # --- Setup ---
     setup_logger(args.seed)
+    set_plot_style()
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -196,7 +197,14 @@ def main():
     for idx, label in enumerate(labels):
         offsets = x + (idx - (len(labels) - 1) / 2) * width
         values = [results[label][d] for d in disk_names]
-        bars = ax.bar(offsets, values, width, label=label.replace("_", " "))
+        bars = ax.bar(
+            offsets,
+            values,
+            width,
+            label=label.replace("_", " "),
+            color=PLOT_COLORS[idx % len(PLOT_COLORS)],
+            edgecolor="black",
+        )
         ax.bar_label(bars, fmt="%.3f", padding=3)
 
     ax.set_ylabel("Importance (Drop in Solve Rate)")
