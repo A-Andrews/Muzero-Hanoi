@@ -65,11 +65,18 @@ def evaluate_network(env, mcts, networks, episodes, device):
         reward_diffs.append(legal_reward - illegal_reward)
         value_diffs.append(legal_value - illegal_value)
 
+    n_r = len(reward_diffs)
+    n_v = len(value_diffs)
+
     return {
         "reward_diff_mean": float(np.mean(reward_diffs)) if reward_diffs else 0.0,
-        "reward_diff_std": float(np.std(reward_diffs)) if reward_diffs else 0.0,
+        "reward_diff_std": (
+            float(np.std(reward_diffs, ddof=1) / np.sqrt(n_r)) if reward_diffs else 0.0
+        ),
         "value_diff_mean": float(np.mean(value_diffs)) if value_diffs else 0.0,
-        "value_diff_std": float(np.std(value_diffs)) if value_diffs else 0.0,
+        "value_diff_std": (
+            float(np.std(value_diffs, ddof=1) / np.sqrt(n_v)) if value_diffs else 0.0
+        ),
     }
 
 
@@ -95,10 +102,10 @@ def plot_results(results, save_path):
     axs[0].set_title("Legal - Illegal")
     axs[0].set_xticks(x)
     axs[0].set_xticklabels(labels, rotation=45)
-    for bar, val in zip(bars1, reward_means):
+    for bar, val, std in zip(bars1, reward_means, reward_stds):
         axs[0].text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
+            bar.get_height() + std + 0.02,
             f"{val:.2f}",
             ha="center",
             va="bottom",
@@ -116,10 +123,10 @@ def plot_results(results, save_path):
     axs[1].set_title("Legal - Illegal")
     axs[1].set_xticks(x)
     axs[1].set_xticklabels(labels, rotation=45)
-    for bar, val in zip(bars2, value_means):
+    for bar, val, std in zip(bars2, value_means, value_stds):
         axs[1].text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
+            bar.get_height() + std + 0.02,
             f"{val:.2f}",
             ha="center",
             va="bottom",

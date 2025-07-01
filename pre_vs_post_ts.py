@@ -100,7 +100,7 @@ def main():
         init_pol, final_pol = get_policies(net, mcts, state)
         policies[name] = (init_pol, final_pol)
 
-    action_labels = [f"{a[0]}->{a[1]}" for a in env.moves]
+    action_labels = [f"{a[0]}\u2192{a[1]}" for a in env.moves]
     x = np.arange(len(action_labels))
 
     fig, axs = plt.subplots(1, len(policies), figsize=(12, 4), sharey=True)

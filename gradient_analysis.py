@@ -341,12 +341,12 @@ def get_results(networks, state, action):
 def get_action_str(action_int):
     """Converts an action integer to a human-readable string."""
     action_map = {
-        0: "A -> B",
-        1: "A -> C",
-        2: "B -> A",
-        3: "B -> C",
-        4: "C -> A",
-        5: "C -> B",
+        0: "A \u2192 B",
+        1: "A \u2192 C",
+        2: "B \u2192 A",
+        3: "B \u2192 C",
+        4: "C \u2192 A",
+        5: "C \u2192 B",
     }
     return action_map.get(action_int, f"Action {action_int}")
 
@@ -363,13 +363,13 @@ def compute_saliency(state, N, networks, action):
 
     # Define each head as a function mapping input→scalar
     heads = {
-        "representation": lambda x: networks.represent(x).mean(),
-        "dynamic": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
-            0
-        ].mean(),
-        "reward": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
-            1
-        ].mean(),
+        # "representation": lambda x: networks.represent(x).mean(),
+        # "dynamic": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
+        #     0
+        # ].mean(),
+        # "reward": lambda x: networks.dynamics(networks.represent(x), dummy_action)[
+        #     1
+        # ].mean(),
         "policy": lambda x: (lambda logits: logits[0, logits.argmax(dim=1).item()])(
             networks.prediction(networks.represent(x))[0]
         ),
@@ -508,7 +508,7 @@ def aggregate_saliency_per_disk(saliency_vector, num_disks=3, num_rods=3):
     return saliency_per_disk
 
 
-def visualize_saliency_comparison(saliency_data, state, file_dir):
+def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=None):
     """
     Creates and saves a subplot comparing saliency diagrams for each MuZero network.
 
@@ -551,9 +551,10 @@ def visualize_saliency_comparison(saliency_data, state, file_dir):
         )
 
     # Add a main title to the entire figure
-    fig.suptitle(
-        f"Saliency Map for State: {state}, Action: {action_str}", fontsize=20, y=1.05
-    )
+    title = f"Saliency Map for State: {state}, Action: {action_str}"
+    if model_label:
+        title = f"{model_label} – " + title
+    fig.suptitle(title, fontsize=20, y=1.05)
 
     save_path = os.path.join(file_dir, "gradients_hanoi_diagram.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -657,7 +658,12 @@ if __name__ == "__main__":
         os.makedirs(file_dir, exist_ok=True)
         logging.info(f"Collected features for {label}: {fmap}")
         save_results(data_dict, file_dir)
-        visualize_gradients_subgraphs(data_dict, args.state, file_dir, fmap, sal)
-        visualize_saliency_comparison(saliency_data=sal, state=state, file_dir=file_dir)
+        # visualize_gradients_subgraphs(data_dict, args.state, file_dir, fmap, sal)
+        visualize_saliency_comparison(
+            saliency_data=sal,
+            state=state,
+            file_dir=file_dir,
+            model_label=label.replace("_", " ").capitalize(),
+        )
 
     logging.info("Gradient analysis completed and results saved.")

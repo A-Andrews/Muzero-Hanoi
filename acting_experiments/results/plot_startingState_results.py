@@ -40,6 +40,14 @@ label_5 = "ResetLatentVal_ResetLatentRwd"
 
 labels = [label_1, label_2, label_3, lable_4, label_5]
 
+name_1 = "Muzero"
+name_2 = "Policy Ablated"
+name_3 = "Value Ablated"
+name_4 = "Reward Ablated"
+name_5 = "Value + Reward Ablated"
+
+names = [name_1, name_2, name_3, name_4, name_5]
+
 set_plot_style()
 
 font_s = 7
@@ -56,7 +64,7 @@ fig, axs = plt.subplots(
     gridspec_kw={
         "wspace": 0.32,
         "hspace": 0.3,
-        "left": 0.065,
+        "left": 0.1,
         "right": 0.97,
         "bottom": 0.15,
         "top": 0.95,
@@ -90,17 +98,26 @@ for d in directories:
             elif e == 2:
                 axs[e, i].set_ylabel("Close\nError", fontsize=font_s)
         if e == 0:
-            axs[e, i].set_title(labels[i], fontsize=font_s)
+            axs[e, i].set_title(names[i], fontsize=font_s)
         if e == len(directories) - 1:
             axs[e, i].set_xlabel(
-                "N. simulations every real step \n (planning time)",
+                "N. simulations per step \n (planning time)",
                 fontsize=font_s,
             )
         i += 1
     e += 1
 
+fig.tight_layout()
+fig.savefig(
+    os.path.join(root_dir, f"MuZero_Ablation_Comparison_{timestamp}.png"),
+    dpi=1200,
+)
+
+labels = [label_1, label_2, label_3]
+names = [name_1, name_2, name_3]
+
 fig_bar, axs_bar = plt.subplots(
-    nrows=1, ncols=len(directories), figsize=(7.5, 2.2), sharey=True
+    nrows=1, ncols=len(directories), figsize=(7.5, 3), sharey=True
 )
 
 for e, d in enumerate(directories):
@@ -124,9 +141,13 @@ for e, d in enumerate(directories):
             times_to_reach.append(r[-1, 0])
             never_reached_mask.append(True)
 
-    bars = axs_bar[e].bar(labels, times_to_reach, color=col_colors, edgecolor="black")
-    axs_bar[e].set_title(["Far", "Mid", "Close"][e])
-    axs_bar[e].set_ylabel("Simulations to\nreach MuZero \n mean error")
+    bars = axs_bar[e].bar(names, times_to_reach, color=col_colors, edgecolor="black")
+    max_height = max(times_to_reach)
+    label_offset = max_height * 0.05
+    axs_bar[e].set_ylim(0, max_height * 1.25)
+
+    axs_bar[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e], pad=10)
+    axs_bar[e].set_ylabel("Simulations to\nbase rate")
     axs_bar[e].tick_params(axis="x", rotation=45)
 
     # Add hatching and/or asterisks for "never reached"
@@ -136,7 +157,7 @@ for e, d in enumerate(directories):
             # Optional: Add asterisk above the bar
             axs_bar[e].text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 2,  # adjust as needed
+                bar.get_height() + label_offset,  # adjust as needed
                 "*",
                 ha="center",
                 va="bottom",
@@ -163,7 +184,7 @@ fig_bar.savefig(
 # === Add Average Performance Bar Chart ===
 
 fig_avg, axs_avg = plt.subplots(
-    nrows=1, ncols=len(directories), figsize=(7.5, 2.2), sharey=True
+    nrows=1, ncols=len(directories), figsize=(7.5, 3), sharey=True
 )
 
 for e, d in enumerate(directories):
@@ -174,9 +195,9 @@ for e, d in enumerate(directories):
         arr = torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
     # Plot as bar chart
-    bars = axs_avg[e].bar(labels, results, color=col_colors, edgecolor="black")
-    axs_avg[e].set_title(["Far", "Mid", "Close"][e])
-    axs_avg[e].set_ylabel("Mean acting accuracy\n(lower is better)")
+    bars = axs_avg[e].bar(names, results, color=col_colors, edgecolor="black")
+    axs_avg[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e])
+    axs_avg[e].set_ylabel("Mean Error")
     axs_avg[e].tick_params(axis="x", rotation=45)
     # Annotate bars with their value
     for idx, bar in enumerate(bars):

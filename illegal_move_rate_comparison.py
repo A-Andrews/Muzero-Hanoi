@@ -45,7 +45,7 @@ def illegal_move_rate(env, networks, mcts, episodes=100, temperature=0.0):
         return 0.0, 0.0
 
     mean_rate = float(np.mean(episode_rates))
-    std_rate = float(np.std(episode_rates))
+    std_rate = float(np.std(episode_rates, ddof=1) / np.sqrt(len(episode_rates)))
     return mean_rate, std_rate
 
 
@@ -106,12 +106,12 @@ def main(timestamp, episodes):
         color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
         edgecolor="black",
     )
-    ax.set_ylabel("Illegal move rate (%)")
+    ax.set_ylabel("Illegal move rate")
     ax.set_ylim(0, max(5, max(rates) * 100 + 5))
-    for bar, rate in zip(bars, rates):
+    for bar, rate, std in zip(bars, rates, stds):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 0.5,
+            bar.get_height() + std * 100 + 0.5,
             f"{rate*100:.1f}",
             ha="center",
             va="bottom",
