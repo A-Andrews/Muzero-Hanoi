@@ -96,7 +96,7 @@ def plot_results(results, save_path):
         yerr=reward_stds,
         capsize=5,
         color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
-        edgecolor="black",
+        edgecolor="none",
     )
     axs[0].set_ylabel("Predicted Reward Difference")
     axs[0].set_title("Legal - Illegal")
@@ -117,7 +117,7 @@ def plot_results(results, save_path):
         yerr=value_stds,
         capsize=5,
         color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
-        edgecolor="black",
+        edgecolor="none",
     )
     axs[1].set_ylabel("Predicted Value Difference")
     axs[1].set_title("Legal - Illegal")

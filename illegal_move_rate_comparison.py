@@ -104,7 +104,7 @@ def main(timestamp, episodes):
         yerr=np.array(stds) * 100,
         capsize=5,
         color=[PLOT_COLORS[0], PLOT_COLORS[1], PLOT_COLORS[2]],
-        edgecolor="black",
+        edgecolor="none",
     )
     ax.set_ylabel("Illegal move rate")
     ax.set_ylim(0, max(5, max(rates) * 100 + 5))

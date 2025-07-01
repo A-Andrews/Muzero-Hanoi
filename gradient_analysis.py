@@ -97,7 +97,7 @@ def visualize_gradients_subgraphs(
         }
     )
     # Use seaborn's colorblind palette
-    cb_colors = sns.color_palette("colorblind")
+    cb_colors = sns.color_palette(PLOT_COLORS, n_colors=7)
     num_nets = len(gradients_dict)
     net_names = list(gradients_dict.keys())
 
@@ -138,7 +138,7 @@ def visualize_gradients_subgraphs(
         magnitudes = [g.abs().mean().item() for g in grads]
         layers = np.arange(len(magnitudes))
         bars = axes[net_idx, 0].bar(
-            layers, magnitudes, color=cb_colors[0], edgecolor="k", linewidth=0.7
+            layers, magnitudes, color=cb_colors[0], linewidth=0.7
         )
         axes[net_idx, 0].set_title(f"{net_name.capitalize()} – Mean Abs Grad")
         if len(magnitudes) > 0:
@@ -163,7 +163,7 @@ def visualize_gradients_subgraphs(
                 all_grads.detach().cpu().numpy(),
                 bins=80,
                 color=cb_colors[1],
-                edgecolor="k",
+                edgecolor="none",
                 alpha=0.7,
             )
         else:
@@ -190,7 +190,6 @@ def visualize_gradients_subgraphs(
             color=cb_colors[2],
             markersize=8,
             linewidth=2,
-            markeredgecolor="k",
         )
         axes[net_idx, 2].set_title(f"{net_name.capitalize()} – Grad Norms")
         axes[net_idx, 2].set_xlabel("Layer")
@@ -244,7 +243,6 @@ def visualize_gradients_subgraphs(
                 range(len(saliency)),
                 saliency,
                 color=cb_colors[4],
-                edgecolor="k",
                 linewidth=0.6,
             )
             if len(saliency) > 0:
@@ -397,9 +395,9 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
     """
     rod_positions = [0, 1, 2]
     disk_visual_props = {
-        "large": {"width": 0.8, "color": "firebrick", "label": "Large"},
-        "medium": {"width": 0.6, "color": "royalblue", "label": "Medium"},
-        "small": {"width": 0.4, "color": "forestgreen", "label": "Small"},
+        "large": {"width": 0.8, "color": "#994636", "label": "Large"},
+        "medium": {"width": 0.6, "color": "#776885", "label": "Medium"},
+        "small": {"width": 0.4, "color": "#426A5A", "label": "Small"},
     }
     disk_order = ["large", "medium", "small"]
 
@@ -437,16 +435,12 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
         props = disk_visual_props[disk_name]
 
         norm_saliency = 0.0
-        alpha_val, linewidth_val, edge_color = 1.0, 1.5, "black"
-        face_color = props["color"]
+        face_colour = props["color"]
         if saliency_per_disk:
             norm_saliency = normalized_saliencies[disk_name]
-            intensity = 0.5 + norm_saliency * 0.5
+            intensity = 0.3 + 0.7 * norm_saliency
             base_col = np.array(mcolors.to_rgb(props["color"]))
             face_colour = tuple(intensity * base_col + (1 - intensity) * np.ones(3))
-            linewidth_val = 1.5 + norm_saliency * 3.5
-            if norm_saliency > 0.95:
-                edge_color = "gold"
 
         disk_text = f"{props['label'][0]}: {norm_saliency:.2f}"
 
@@ -455,9 +449,9 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
             props["width"],
             0.3,
             facecolor=face_colour,
-            edgecolor=edge_color,
-            linewidth=linewidth_val,
-            alpha=alpha_val,
+            edgecolor="none",
+            linewidth=0,
+            alpha=1.0,
         )
         ax.add_patch(rect)
         ax.text(
@@ -526,7 +520,7 @@ def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=No
     fig, axes = plt.subplots(
         1,
         num_nets,
-        figsize=(5 * num_nets, 5.5),  # Adjust size for readability
+        figsize=(5 * num_nets, 3.5),  # Adjust size for readability
         constrained_layout=True,
     )
 

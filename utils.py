@@ -107,7 +107,7 @@ def setup_logger(seed):
 
 
 # Colourblind-friendly palette for all plots
-PLOT_COLORS = sns.color_palette("colorblind").as_hex()
+PLOT_COLORS = ["#994636", "#426A5A", "#776885"]
 
 
 def set_plot_style() -> None:
@@ -126,5 +126,7 @@ def set_plot_style() -> None:
             "ytick.labelsize": 9,
             "legend.fontsize": 9,
             "axes.grid": False,
+            "axes.edgecolor": "black",
+            "axes.linewidth": 1.0,
         }
     )

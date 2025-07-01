@@ -203,7 +203,7 @@ def main():
             width,
             label=label.replace("_", " "),
             color=PLOT_COLORS[idx % len(PLOT_COLORS)],
-            edgecolor="black",
+            edgecolor="none",
         )
         ax.bar_label(bars, fmt="%.3f", padding=3)
 

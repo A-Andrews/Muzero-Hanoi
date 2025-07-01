@@ -141,7 +141,7 @@ for e, d in enumerate(directories):
             times_to_reach.append(r[-1, 0])
             never_reached_mask.append(True)
 
-    bars = axs_bar[e].bar(names, times_to_reach, color=col_colors, edgecolor="black")
+    bars = axs_bar[e].bar(names, times_to_reach, color=col_colors, edgecolor="none")
     max_height = max(times_to_reach)
     label_offset = max_height * 0.05
     axs_bar[e].set_ylim(0, max_height * 1.25)
@@ -195,7 +195,7 @@ for e, d in enumerate(directories):
         arr = torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
     # Plot as bar chart
-    bars = axs_avg[e].bar(names, results, color=col_colors, edgecolor="black")
+    bars = axs_avg[e].bar(names, results, color=col_colors, edgecolor="none")
     axs_avg[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e])
     axs_avg[e].set_ylabel("Mean Error")
     axs_avg[e].tick_params(axis="x", rotation=45)
