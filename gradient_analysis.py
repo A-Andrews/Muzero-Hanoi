@@ -421,9 +421,10 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
                 )
 
     ax.clear()
-    ax.hlines(0, -0.5, 2.5, colors="black", linewidth=3)
+    rod_height = 2.0
+    ax.hlines(0, -0.5, 2.5, colors="black", linewidth=3, zorder=0)
     for rod_pos in rod_positions:
-        ax.vlines(rod_pos, 0, 3.5, colors="black", linewidth=2)
+        ax.vlines(rod_pos, 0, rod_height, colors="black", linewidth=2, zorder=0)
 
     rod_counts = {0: 0, 1: 0, 2: 0}
 
@@ -452,6 +453,7 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
             edgecolor="none",
             linewidth=0,
             alpha=1.0,
+            zorder=1,
         )
         ax.add_patch(rect)
         ax.text(
@@ -468,12 +470,14 @@ def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
         rod_counts[rod] += 1
 
     ax.set_xlim(-0.6, 2.6)
-    ax.set_ylim(-0.1, 4.0)
+    ax.set_ylim(-0.1, rod_height + 0.2)
     ax.set_xticks(rod_positions)
     ax.set_xticklabels(["A", "B", "C"])
     ax.set_yticklabels([])
     ax.set_title(title, fontsize=14)
-    ax.grid(True, linestyle="--", alpha=0.3)
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
 
 def aggregate_saliency_per_disk(saliency_vector, num_disks=3, num_rods=3):
@@ -520,7 +524,7 @@ def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=No
     fig, axes = plt.subplots(
         1,
         num_nets,
-        figsize=(5 * num_nets, 3.5),  # Adjust size for readability
+        figsize=(5 * num_nets, 2.5),  # Adjust size for readability
         constrained_layout=True,
     )
 
@@ -543,12 +547,16 @@ def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=No
             title=f"{net_name.capitalize()} Saliency",
             saliency_per_disk=saliency_scores,
         )
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
     # Add a main title to the entire figure
     title = f"Saliency Map for State: {state}, Action: {action_str}"
     if model_label:
         title = f"{model_label} – " + title
-    fig.suptitle(title, fontsize=20, y=1.05)
+    # Raise the figure title a bit higher so it sits well above the subplot
+    # titles for a cleaner layout
+    fig.suptitle(title, fontsize=20, y=1.12)
 
     save_path = os.path.join(file_dir, "gradients_hanoi_diagram.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")

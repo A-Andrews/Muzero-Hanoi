@@ -55,7 +55,7 @@ mpl.rc("font", size=font_s)
 mpl.rcParams["xtick.labelsize"] = font_s
 mpl.rcParams["ytick.labelsize"] = font_s
 
-col_colors = PLOT_COLORS[: len(labels)]
+col_colors = PLOT_COLORS
 
 fig, axs = plt.subplots(
     nrows=len(directories),
@@ -86,7 +86,7 @@ for d in directories:
 
     i = 0
     for r in results:
-        axs[e, i].plot(r[:, 0], r[:, 1], color=col_colors[i])
+        axs[e, i].plot(r[:, 0], r[:, 1], color=col_colors[i % len(col_colors)])
         axs[e, i].set_ylim([0, 100])
         axs[e, i].spines["right"].set_visible(False)
         axs[e, i].spines["top"].set_visible(False)
@@ -141,7 +141,12 @@ for e, d in enumerate(directories):
             times_to_reach.append(r[-1, 0])
             never_reached_mask.append(True)
 
-    bars = axs_bar[e].bar(names, times_to_reach, color=col_colors, edgecolor="none")
+    bars = axs_bar[e].bar(
+        names,
+        times_to_reach,
+        color=[col_colors[i % len(col_colors)] for i in range(len(names))],
+        edgecolor="none",
+    )
     max_height = max(times_to_reach)
     label_offset = max_height * 0.05
     axs_bar[e].set_ylim(0, max_height * 1.25)
@@ -149,6 +154,8 @@ for e, d in enumerate(directories):
     axs_bar[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e], pad=10)
     axs_bar[e].set_ylabel("Simulations to\nbase rate")
     axs_bar[e].tick_params(axis="x", rotation=45)
+    axs_bar[e].spines["right"].set_visible(False)
+    axs_bar[e].spines["top"].set_visible(False)
 
     # Add hatching and/or asterisks for "never reached"
     for idx, (bar, never) in enumerate(zip(bars, never_reached_mask)):
@@ -195,10 +202,17 @@ for e, d in enumerate(directories):
         arr = torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
     # Plot as bar chart
-    bars = axs_avg[e].bar(names, results, color=col_colors, edgecolor="none")
+    bars = axs_avg[e].bar(
+        names,
+        results,
+        color=[col_colors[i % len(col_colors)] for i in range(len(names))],
+        edgecolor="none",
+    )
     axs_avg[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e])
     axs_avg[e].set_ylabel("Mean Error")
     axs_avg[e].tick_params(axis="x", rotation=45)
+    axs_avg[e].spines["right"].set_visible(False)
+    axs_avg[e].spines["top"].set_visible(False)
     # Annotate bars with their value
     for idx, bar in enumerate(bars):
         axs_avg[e].text(

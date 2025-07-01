@@ -113,6 +113,8 @@ def main():
         ax.set_xticks(x)
         ax.set_xticklabels(action_labels, rotation=45)
         ax.set_ylim(0, 1)
+        ax.spines["right"].set_visible(False)
+        ax.spines["top"].set_visible(False)
     axs[0].set_ylabel("Probability")
     axs[-1].legend(loc="upper right")
     plt.tight_layout()

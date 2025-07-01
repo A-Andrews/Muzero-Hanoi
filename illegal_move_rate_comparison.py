@@ -116,6 +116,8 @@ def main(timestamp, episodes):
             ha="center",
             va="bottom",
         )
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
     fig.tight_layout()
     plot_path = os.path.join(
         "stats", "Hanoi", timestamp, f"illegal_move_rate_{timestamp}.png"

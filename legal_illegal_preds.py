@@ -110,6 +110,8 @@ def plot_results(results, save_path):
             ha="center",
             va="bottom",
         )
+    axs[0].spines["right"].set_visible(False)
+    axs[0].spines["top"].set_visible(False)
 
     bars2 = axs[1].bar(
         x,
@@ -123,6 +125,8 @@ def plot_results(results, save_path):
     axs[1].set_title("Legal - Illegal")
     axs[1].set_xticks(x)
     axs[1].set_xticklabels(labels, rotation=45)
+    axs[1].spines["right"].set_visible(False)
+    axs[1].spines["top"].set_visible(False)
     for bar, val, std in zip(bars2, value_means, value_stds):
         axs[1].text(
             bar.get_x() + bar.get_width() / 2,
