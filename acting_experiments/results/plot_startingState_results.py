@@ -90,6 +90,8 @@ for d in directories:
         axs[e, i].set_ylim([0, 100])
         axs[e, i].spines["right"].set_visible(False)
         axs[e, i].spines["top"].set_visible(False)
+        if i != 0:
+            axs[e, i].tick_params(axis="y", left=False, labelleft=False)
         if i == 0:
             if e == 0:
                 axs[e, i].set_ylabel("Far\nError", fontsize=font_s)
@@ -152,10 +154,15 @@ for e, d in enumerate(directories):
     axs_bar[e].set_ylim(0, max_height * 1.25)
 
     axs_bar[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e], pad=10)
-    axs_bar[e].set_ylabel("Simulations to\nbase rate")
-    axs_bar[e].tick_params(axis="x", rotation=45)
+    if e == 0:
+        axs_bar[e].set_ylabel("Simulations to\nbase rate")
     axs_bar[e].spines["right"].set_visible(False)
     axs_bar[e].spines["top"].set_visible(False)
+    if e == len(directories) - 1:
+        axs_bar[e].legend(
+            bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right"
+        )
+    axs_bar[e].get_xaxis().set_visible(False)
 
     # Add hatching and/or asterisks for "never reached"
     for idx, (bar, never) in enumerate(zip(bars, never_reached_mask)):
@@ -208,11 +215,18 @@ for e, d in enumerate(directories):
         color=[col_colors[i % len(col_colors)] for i in range(len(names))],
         edgecolor="none",
     )
+    axs_avg[e].get_xaxis().set_visible(False)
     axs_avg[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e])
-    axs_avg[e].set_ylabel("Mean Error")
-    axs_avg[e].tick_params(axis="x", rotation=45)
+    if e == 0:
+        axs_avg[e].set_ylabel("Mean Error")
     axs_avg[e].spines["right"].set_visible(False)
     axs_avg[e].spines["top"].set_visible(False)
+
+    if e == len(directories) - 1:
+        axs_avg[e].legend(
+            bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right"
+        )
+
     # Annotate bars with their value
     for idx, bar in enumerate(bars):
         axs_avg[e].text(
