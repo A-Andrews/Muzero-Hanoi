@@ -16,9 +16,11 @@ from MCTS.mcts import MCTS
 from networks import MuZeroNet
 from utils import PLOT_COLORS, oneHot_encoding, set_plot_style, setup_logger
 
-# import model
-# run model with incorrect state
-# record gradients of networks
+ABLATION_COLORS = {
+    "baseline": "#000000",
+    "policy_ablated": "#B9D6F2",
+    "value_ablated": "#ED9390",
+}
 
 
 def get_activation(name, fmap_dict):
@@ -389,15 +391,29 @@ def compute_saliency(state, N, networks, action):
     return saliencies
 
 
-def visualize_hanoi_state(ax, state, title, saliency_per_disk=None):
-    """
-    Visualize the Hanoi state, optionally adjusting disk appearance for saliency.
+def visualize_hanoi_state(
+    ax, state, title, saliency_per_disk=None, base_color="#000000"
+):
+    """Visualize a Hanoi state highlighting disk saliency.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis on which to draw the diagram.
+    state : tuple
+        Current puzzle state.
+    title : str
+        Title for the subplot.
+    saliency_per_disk : list, optional
+        Saliency score for each disk ordered ``[small, medium, large]``.
+    base_color : str, optional
+        Hex colour to tint the disks. Defaults to black.
     """
     rod_positions = [0, 1, 2]
     disk_visual_props = {
-        "large": {"width": 0.8, "color": "#994636", "label": "Large"},
-        "medium": {"width": 0.6, "color": "#776885", "label": "Medium"},
-        "small": {"width": 0.4, "color": "#426A5A", "label": "Small"},
+        "large": {"width": 0.8, "color": base_color, "label": "Large"},
+        "medium": {"width": 0.6, "color": base_color, "label": "Medium"},
+        "small": {"width": 0.4, "color": base_color, "label": "Small"},
     }
     disk_order = ["large", "medium", "small"]
 
@@ -506,7 +522,9 @@ def aggregate_saliency_per_disk(saliency_vector, num_disks=3, num_rods=3):
     return saliency_per_disk
 
 
-def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=None):
+def visualize_saliency_comparison(
+    saliency_data, state, file_dir, model_label=None, base_color="#000000"
+):
     """
     Creates and saves a subplot comparing saliency diagrams for each MuZero network.
 
@@ -546,6 +564,7 @@ def visualize_saliency_comparison(saliency_data, state, file_dir, model_label=No
             state=state,
             title=f"{net_name.capitalize()} Saliency",
             saliency_per_disk=saliency_scores,
+            base_color=base_color,
         )
         for spine in ax.spines.values():
             spine.set_visible(False)
@@ -666,6 +685,7 @@ if __name__ == "__main__":
             state=state,
             file_dir=file_dir,
             model_label=label.replace("_", " ").capitalize(),
+            base_color=ABLATION_COLORS.get(label, "#000000"),
         )
 
     logging.info("Gradient analysis completed and results saved.")

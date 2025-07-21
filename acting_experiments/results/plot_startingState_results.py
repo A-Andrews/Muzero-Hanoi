@@ -32,6 +32,9 @@ dir_3 = "LS"
 
 directories = [dir_1, dir_2, dir_3]
 
+directories_bar = [dir_3, dir_2, dir_1]
+state_titles = ["Close to goal", "Mid distance", "Far from goal"]
+
 label_1 = "Muzero"
 label_2 = "ResetLatentPol"
 label_3 = "ResetLatentVal"
@@ -119,10 +122,10 @@ labels = [label_1, label_2, label_3]
 names = [name_1, name_2, name_3]
 
 fig_bar, axs_bar = plt.subplots(
-    nrows=1, ncols=len(directories), figsize=(7.5, 3), sharey=True
+    nrows=1, ncols=len(directories_bar), figsize=(7.5, 3), sharey=True
 )
 
-for e, d in enumerate(directories):
+for e, d in enumerate(directories_bar):
     results = []
     file_dir = os.path.join(root_dir, d)
     for l in labels:
@@ -153,12 +156,12 @@ for e, d in enumerate(directories):
     label_offset = max_height * 0.05
     axs_bar[e].set_ylim(0, max_height * 1.25)
 
-    axs_bar[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e], pad=10)
+    axs_bar[e].set_title(state_titles[e], pad=10)
     if e == 0:
         axs_bar[e].set_ylabel("Simulations to\nbase rate")
     axs_bar[e].spines["right"].set_visible(False)
     axs_bar[e].spines["top"].set_visible(False)
-    if e == len(directories) - 1:
+    if e == len(directories_bar) - 1:
         axs_bar[e].legend(
             bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right"
         )
@@ -198,10 +201,10 @@ fig_bar.savefig(
 # === Add Average Performance Bar Chart ===
 
 fig_avg, axs_avg = plt.subplots(
-    nrows=1, ncols=len(directories), figsize=(7.5, 3), sharey=True
+    nrows=1, ncols=len(directories_bar), figsize=(7.5, 3), sharey=True
 )
 
-for e, d in enumerate(directories):
+for e, d in enumerate(directories_bar):
     results = []
     file_dir = os.path.join(root_dir, d)
     for l in labels:
@@ -216,13 +219,13 @@ for e, d in enumerate(directories):
         edgecolor="none",
     )
     axs_avg[e].get_xaxis().set_visible(False)
-    axs_avg[e].set_title(["Far from goal", "Mid distance", "Close to goal"][e])
+    axs_avg[e].set_title(state_titles[e])
     if e == 0:
         axs_avg[e].set_ylabel("Mean Error")
     axs_avg[e].spines["right"].set_visible(False)
     axs_avg[e].spines["top"].set_visible(False)
 
-    if e == len(directories) - 1:
+    if e == len(directories_bar) - 1:
         axs_avg[e].legend(
             bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right"
         )

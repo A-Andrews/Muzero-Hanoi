@@ -107,7 +107,7 @@ def setup_logger(seed):
 
 
 # Colourblind-friendly palette for all plots
-PLOT_COLORS = ["#994636", "#426A5A", "#776885"]
+PLOT_COLORS = ["#000000", "#B9D6F2", "#ED9390"]
 
 
 def set_plot_style() -> None:
