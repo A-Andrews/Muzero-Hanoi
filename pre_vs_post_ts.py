@@ -18,6 +18,16 @@ from networks import MuZeroNet
 from utils import PLOT_COLORS, set_plot_style, setup_logger
 
 
+def wilson_error(p: float, n: int, z: float = 1.96) -> float:
+    """Return half-width of Wilson confidence interval for a proportion."""
+    if n == 0:
+        return 0.0
+    center = (p + z**2 / (2 * n)) / (1 + z**2 / n)
+    half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n * n)) / (1 + z**2 / n)
+    upper = center + half
+    return upper - center
+
+
 def ablate_networks(networks, ablate_policy=False, ablate_value=False):
     """Return a copy of ``networks`` with selected components reinitialised."""
     ablated = copy.deepcopy(networks)
@@ -107,8 +117,24 @@ def main():
     if len(policies) == 1:
         axs = [axs]
     for ax, (name, (init_pol, final_pol)) in zip(axs, policies.items()):
-        ax.bar(x - 0.2, init_pol, width=0.4, label="Initial")
-        ax.bar(x + 0.2, final_pol, width=0.4, label="After MCTS")
+        init_err = wilson_error(init_pol, 50)
+        final_err = wilson_error(final_pol, 50)
+        ax.bar(
+            x - 0.2,
+            init_pol,
+            yerr=init_err,
+            capsize=5,
+            width=0.4,
+            label="Initial",
+        )
+        ax.bar(
+            x + 0.2,
+            final_pol,
+            yerr=final_err,
+            capsize=5,
+            width=0.4,
+            label="After MCTS",
+        )
         ax.set_title(name)
         ax.set_xticks(x)
         ax.set_xticklabels(action_labels, rotation=45)

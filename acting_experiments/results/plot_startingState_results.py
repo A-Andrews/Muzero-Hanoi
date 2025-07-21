@@ -53,6 +53,16 @@ names = [name_1, name_2, name_3, name_4, name_5]
 
 set_plot_style()
 
+
+def load_accuracy(directory: str, label: str) -> np.ndarray:
+    """Load saved accuracy array with optional variance column."""
+    path = os.path.join(directory, label + "_actingAccuracy.pt")
+    arr = torch.load(path)
+    if torch.is_tensor(arr):
+        arr = arr.cpu().numpy()
+    return np.asarray(arr, dtype=float)
+
+
 font_s = 7
 mpl.rc("font", size=font_s)
 mpl.rcParams["xtick.labelsize"] = font_s
@@ -89,7 +99,16 @@ for d in directories:
 
     i = 0
     for r in results:
-        axs[e, i].plot(r[:, 0], r[:, 1], color=col_colors[i % len(col_colors)])
+        errs = np.zeros_like(r[:, 1])
+        axs[e, i].errorbar(
+            r[:, 0],
+            r[:, 1],
+            yerr=errs,
+            fmt="-o",
+            color=col_colors[i % len(col_colors)],
+            markersize=4,
+            capsize=3,
+        )
         axs[e, i].set_ylim([0, 100])
         axs[e, i].spines["right"].set_visible(False)
         axs[e, i].spines["top"].set_visible(False)
@@ -149,6 +168,8 @@ for e, d in enumerate(directories_bar):
     bars = axs_bar[e].bar(
         names,
         times_to_reach,
+        yerr=np.zeros_like(times_to_reach),
+        capsize=5,
         color=[col_colors[i % len(col_colors)] for i in range(len(names))],
         edgecolor="none",
     )
@@ -215,6 +236,8 @@ for e, d in enumerate(directories_bar):
     bars = axs_avg[e].bar(
         names,
         results,
+        yerr=np.zeros_like(results),
+        capsize=5,
         color=[col_colors[i % len(col_colors)] for i in range(len(names))],
         edgecolor="none",
     )
