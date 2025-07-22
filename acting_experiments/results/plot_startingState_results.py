@@ -55,12 +55,33 @@ set_plot_style()
 
 
 def load_accuracy(directory: str, label: str) -> np.ndarray:
-    """Load saved accuracy array with optional variance column."""
-    path = os.path.join(directory, label + "_actingAccuracy.pt")
-    arr = torch.load(path)
+    """Return accuracy array with variance column if available.
+
+    The ``*_actingAccuracy.pt`` files contain the mean acting accuracy for
+    a range of MCTS simulations. When ``multi_run_ablation_eval`` is used to
+    produce variances, a companion ``*_actingAccuracy_error.pt`` file is saved
+    containing an additional standard deviation column.  Only the variance
+    values should be taken from that file while all other values come from the
+    regular one.
+    """
+
+    default_path = os.path.join(directory, label + "_actingAccuracy.pt")
+
+    arr = torch.load(default_path)
     if torch.is_tensor(arr):
         arr = arr.cpu().numpy()
-    return np.asarray(arr, dtype=float)
+    arr = np.asarray(arr, dtype=float)
+
+    error_path = os.path.join(directory, label + "_actingAccuracy_error.pt")
+    if os.path.exists(error_path):
+        err_arr = torch.load(error_path)
+        if torch.is_tensor(err_arr):
+            err_arr = err_arr.cpu().numpy()
+        err_arr = np.asarray(err_arr, dtype=float)
+        if err_arr.shape[1] >= 3:
+            arr = np.column_stack([arr, err_arr[:, 2]])
+
+    return arr
 
 
 font_s = 7
@@ -91,15 +112,12 @@ for d in directories:
     file_dir = os.path.join(root_dir, d)
     print(file_dir)
     for l in labels:
-        results.append(
-            torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
-        )
+        results.append(load_accuracy(file_dir, l))
     print([r.shape for r in results])
-    results = np.array(results)
 
     i = 0
     for r in results:
-        errs = np.zeros_like(r[:, 1])
+        errs = r[:, 2] if r.shape[1] > 2 else np.zeros_like(r[:, 1])
         axs[e, i].errorbar(
             r[:, 0],
             r[:, 1],
@@ -148,10 +166,7 @@ for e, d in enumerate(directories_bar):
     results = []
     file_dir = os.path.join(root_dir, d)
     for l in labels:
-        results.append(
-            torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
-        )
-    results = np.array(results)
+        results.append(load_accuracy(file_dir, l))
     mu_zero_avg = results[0][:, 1].mean()
 
     times_to_reach = []
@@ -230,7 +245,7 @@ for e, d in enumerate(directories_bar):
     file_dir = os.path.join(root_dir, d)
     for l in labels:
         # Load and get acting accuracy column
-        arr = torch.load(os.path.join(file_dir, l + "_actingAccuracy.pt")).numpy()
+        arr = load_accuracy(file_dir, l)
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
     # Plot as bar chart
     bars = axs_avg[e].bar(
