@@ -149,7 +149,47 @@ def main():
     os.makedirs(save_dir, exist_ok=True)
     fig_path = os.path.join(save_dir, "policy_evolution.png")
     plt.savefig(fig_path, dpi=300)
+    plt.close(fig)
     print(f"Plot saved to {fig_path}")
+
+    # Overlay plot for policy evolution across configurations
+    overlay_fig, overlay_ax = plt.subplots(figsize=(11, 6))
+    stage_styles = {
+        "Initial": {"linestyle": "-", "marker": "o"},
+        "After MCTS": {"linestyle": "--", "marker": "s"},
+    }
+
+    for idx, (name, (init_pol, final_pol)) in enumerate(policies.items()):
+        color = PLOT_COLORS[idx % len(PLOT_COLORS)]
+        for stage, dist in (("Initial", init_pol), ("After MCTS", final_pol)):
+            err = wilson_error(dist, 50)
+            style = stage_styles[stage]
+            overlay_ax.errorbar(
+                x,
+                dist,
+                yerr=err,
+                capsize=4,
+                color=color,
+                linestyle=style["linestyle"],
+                marker=style["marker"],
+                alpha=0.75,
+                label=f"{name} ({stage})",
+            )
+
+    overlay_ax.set_xticks(x)
+    overlay_ax.set_xticklabels(action_labels, rotation=45)
+    overlay_ax.set_ylabel("Probability")
+    overlay_ax.set_ylim(0, 1)
+    overlay_ax.set_title("Policy evolution per action")
+    overlay_ax.spines['top'].set_visible(False)
+    overlay_ax.spines['right'].set_visible(False)
+    overlay_ax.legend(ncol=2, loc="upper right")
+    overlay_fig.tight_layout()
+
+    overlay_path = os.path.join(save_dir, "policy_evolution_overlay.png")
+    overlay_fig.savefig(overlay_path, dpi=300)
+    plt.close(overlay_fig)
+    print(f"Overlay plot saved to {overlay_path}")
 
 
 if __name__ == "__main__":

@@ -413,9 +413,10 @@ def visualize_hanoi_state(
     disk_visual_props = {
         "large": {"width": 0.8, "color": base_color, "label": "Large"},
         "medium": {"width": 0.6, "color": base_color, "label": "Medium"},
-        "small": {"width": 0.4, "color": base_color, "label": "Small"},
+        "small": {"width": 0.45, "color": base_color, "label": "Small"},
     }
     disk_order = ["large", "medium", "small"]
+    disk_height = 0.32
 
     normalized_saliencies = {}
     if saliency_per_disk:
@@ -448,7 +449,7 @@ def visualize_hanoi_state(
         disk_map = {"small": 0, "medium": 1, "large": 2}
         rod = state[disk_map[disk_name]]
 
-        y_pos = 0.3 + rod_counts[rod] * 0.4
+        y_pos = rod_counts[rod] * disk_height
         props = disk_visual_props[disk_name]
 
         norm_saliency = 0.0
@@ -464,7 +465,7 @@ def visualize_hanoi_state(
         rect = plt.Rectangle(
             (rod - props["width"] / 2, y_pos),
             props["width"],
-            0.3,
+            disk_height,
             facecolor=face_colour,
             edgecolor="none",
             linewidth=0,
@@ -474,7 +475,7 @@ def visualize_hanoi_state(
         ax.add_patch(rect)
         ax.text(
             rod,
-            y_pos + 0.15,
+            y_pos + (disk_height / 2),
             disk_text,
             ha="center",
             va="center",
@@ -486,11 +487,80 @@ def visualize_hanoi_state(
         rod_counts[rod] += 1
 
     ax.set_xlim(-0.6, 2.6)
-    ax.set_ylim(-0.1, rod_height + 0.2)
+    ax.set_ylim(-0.05, rod_height + 0.45)
     ax.set_xticks(rod_positions)
     ax.set_xticklabels(["A", "B", "C"])
     ax.set_yticklabels([])
     ax.set_title(title, fontsize=14)
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+
+
+def draw_disk_saliency_strip(ax, saliency_per_disk, title, base_color="#000000"):
+    """Render a compact disk-only saliency summary on ``ax``."""
+    disk_specs = {
+        "large": {"label": "L", "width": 0.9},
+        "medium": {"label": "M", "width": 0.7},
+        "small": {"label": "S", "width": 0.5},
+    }
+    stack_order = ["large", "medium", "small"]
+    base_rgb = np.array(mcolors.to_rgb(base_color))
+    disk_height = 0.26
+    base_offset = 0.04
+
+    if saliency_per_disk:
+        saliency_dict = {
+            "small": saliency_per_disk[0],
+            "medium": saliency_per_disk[1],
+            "large": saliency_per_disk[2],
+        }
+        min_val = min(saliency_dict.values())
+        max_val = max(saliency_dict.values())
+        if max_val == min_val:
+            normalized = {disk: 0.5 for disk in stack_order}
+        else:
+            normalized = {
+                disk: (saliency_dict[disk] - min_val) / (max_val - min_val)
+                for disk in stack_order
+            }
+    else:
+        normalized = {disk: 0.0 for disk in stack_order}
+
+    for idx, disk_name in enumerate(stack_order):
+        spec = disk_specs[disk_name]
+        score = normalized[disk_name]
+        intensity = 0.3 + 0.7 * score
+        face_colour = tuple(intensity * base_rgb + (1 - intensity) * np.ones(3))
+        y_pos = base_offset + idx * disk_height
+        rect = plt.Rectangle(
+            (0.5 - spec["width"] / 2, y_pos),
+            spec["width"],
+            disk_height,
+            facecolor=face_colour,
+            edgecolor="none",
+            linewidth=0,
+            zorder=1,
+        )
+        ax.add_patch(rect)
+        ax.text(
+            0.5,
+            y_pos + (disk_height / 2),
+            f"{spec['label']}: {score:.2f}",
+            ha="center",
+            va="center",
+            fontsize=8,
+            fontweight="bold",
+            color="white",
+        )
+
+    total_height = base_offset + len(stack_order) * disk_height + 0.1
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, total_height)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(title, fontsize=12, pad=4)
     ax.grid(False)
     for spine in ax.spines.values():
         spine.set_visible(False)
@@ -526,39 +596,39 @@ def visualize_saliency_comparison(
     saliency_data, state, file_dir, model_label=None, base_color="#000000"
 ):
     """
-    Creates and saves a subplot comparing saliency diagrams for each MuZero network.
+    Creates and saves both the full Hanoi saliency diagrams and a compact disk-only
+    summary comparing the saliency per MuZero network.
 
     Args:
-        saliency_data (dict): A dictionary where keys are network names (e.g., 'policy', 'value')
-                              and values are the raw saliency vectors from the model.
+        saliency_data (dict): Mapping of network name to its raw saliency vector.
         state (tuple): The game state for which the saliency was calculated.
-        save_path (str): The file path to save the resulting image (e.g., 'comparison.png').
+        file_dir (str): Directory in which to write the generated figures.
+        model_label (str, optional): Label describing the model variant.
+        base_color (str, optional): Base hex colour used to tint the disks.
     """
     net_names = list(saliency_data.keys())
     num_nets = len(net_names)
     action_str = get_action_str(action)
 
-    # Create a subplot grid: 1 row, columns equal to the number of networks
+    disk_saliency_by_net = {}
+
     fig, axes = plt.subplots(
         1,
         num_nets,
-        figsize=(5 * num_nets, 2.5),  # Adjust size for readability
+        figsize=(5 * num_nets, 2.5),
         constrained_layout=True,
     )
 
-    # If there's only one network, axes is not a list, so we make it one
     if num_nets == 1:
         axes = [axes]
 
-    # Iterate through each network's saliency data
     for i, net_name in enumerate(net_names):
         raw_saliency_vector = saliency_data[net_name]
         ax = axes[i]
 
-        # 1. Aggregate the raw saliency vector to get one score per disk
         saliency_scores = aggregate_saliency_per_disk(raw_saliency_vector)
+        disk_saliency_by_net[net_name] = saliency_scores
 
-        # 2. Use the visualization function to draw the hanoi state on the subplot axis
         visualize_hanoi_state(
             ax=ax,
             state=state,
@@ -569,18 +639,130 @@ def visualize_saliency_comparison(
         for spine in ax.spines.values():
             spine.set_visible(False)
 
-    # Add a main title to the entire figure
-    title = f"Saliency Map for State: {state}, Action: {action_str}"
+    full_title = f"Saliency Map for State: {state}, Action: {action_str}"
     if model_label:
-        title = f"{model_label} – " + title
-    # Raise the figure title a bit higher so it sits well above the subplot
-    # titles for a cleaner layout
-    fig.suptitle(title, fontsize=20, y=1.12)
+        full_title = f"{model_label} – " + full_title
+    fig.suptitle(full_title, fontsize=20, y=1.12)
 
     save_path = os.path.join(file_dir, "gradients_hanoi_diagram.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     logging.info("Comparison subplot saved to: %s", save_path)
+
+    compact_fig, compact_axes = plt.subplots(
+        1,
+        num_nets,
+        figsize=(3.2 * num_nets, 2.2),
+        constrained_layout=True,
+    )
+
+    if num_nets == 1:
+        compact_axes = [compact_axes]
+
+    compact_title = f"Disk saliency summary for State: {state}, Action: {action_str}"
+    if model_label:
+        compact_title = f"{model_label} – " + compact_title
+
+    for ax, net_name in zip(compact_axes, net_names):
+        draw_disk_saliency_strip(
+            ax=ax,
+            saliency_per_disk=disk_saliency_by_net[net_name],
+            title=f"{net_name.capitalize()}",
+            base_color=base_color,
+        )
+
+    compact_fig.suptitle(compact_title, fontsize=16, y=1.04)
+
+    compact_path = os.path.join(file_dir, "gradients_disk_strip.png")
+    compact_fig.savefig(compact_path, dpi=300, bbox_inches="tight")
+    plt.close(compact_fig)
+    logging.info("Compact disk saliency subplot saved to: %s", compact_path)
+
+    overlay_fig, overlay_ax = plt.subplots(figsize=(4.8, 3.2), constrained_layout=True)
+
+    disk_labels = ["Small", "Medium", "Large"]
+    x = np.arange(len(disk_labels))
+
+    overlay_title = f"Disk saliency overlay for State: {state}, Action: {action_str}"
+    if model_label:
+        overlay_title = f"{model_label} – " + overlay_title
+
+    for idx, net_name in enumerate(net_names):
+        scores = np.array(disk_saliency_by_net[net_name])
+        overlay_ax.plot(
+            x,
+            scores,
+            marker="o",
+            linestyle="-",
+            linewidth=1.8,
+            label=net_name.replace("_", " ").capitalize(),
+            color=PLOT_COLORS[idx % len(PLOT_COLORS)],
+            alpha=0.8,
+        )
+
+    overlay_ax.set_xticks(x)
+    overlay_ax.set_xticklabels(disk_labels)
+    overlay_ax.set_ylabel("Aggregated saliency")
+    overlay_ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+    overlay_ax.set_title(overlay_title, fontsize=14)
+    overlay_ax.legend(loc="upper right", frameon=False)
+
+    overlay_fig.tight_layout()
+
+    overlay_path = os.path.join(file_dir, "gradients_disk_overlay.png")
+    overlay_fig.savefig(overlay_path, dpi=300, bbox_inches="tight")
+    plt.close(overlay_fig)
+    logging.info("Disk saliency overlay saved to: %s", overlay_path)
+
+
+    return disk_saliency_by_net
+
+
+def visualize_saliency_strip_grid(all_disk_saliency, state, action, save_path, base_colors):
+    """Create a compact grid comparing disk saliency across model variants."""
+    if not all_disk_saliency:
+        return
+
+    labels = list(all_disk_saliency.keys())
+    head_names = list(next(iter(all_disk_saliency.values())).keys())
+    rows, cols = len(labels), len(head_names)
+
+    cell_width, cell_height = 2.2, 1.6
+    fig, axes = plt.subplots(rows, cols, figsize=(cell_width * cols, cell_height * rows))
+
+    if rows == 1 and cols == 1:
+        axes = np.array([[axes]])
+    elif rows == 1:
+        axes = np.array([axes])
+    elif cols == 1:
+        axes = np.array([[ax] for ax in axes])
+    else:
+        axes = np.array(axes)
+
+    for r, label in enumerate(labels):
+        display_label = label.replace('_', ' ').capitalize()
+        base_color = base_colors.get(label, '#000000')
+        for c, head in enumerate(head_names):
+            ax = axes[r, c]
+            head_title = head.replace('_', ' ').capitalize()
+            combined_title = f"{display_label}\n{head_title}"
+            scores = all_disk_saliency[label].get(head)
+            draw_disk_saliency_strip(
+                ax=ax,
+                saliency_per_disk=scores,
+                title=combined_title,
+                base_color=base_color,
+            )
+
+    fig.suptitle(
+        f"Disk saliency comparison across models – State: {state}, Action: {get_action_str(action)}",
+        fontsize=16,
+        y=0.995,
+    )
+    fig.tight_layout(rect=(0.12, 0.02, 0.98, 0.94))
+    fig.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    logging.info('Combined disk saliency grid saved to: %s', save_path)
 
 
 def set_seed(seed=1):
@@ -674,18 +856,30 @@ if __name__ == "__main__":
     base_dir = os.path.join(
         "stats", "Hanoi", timestamp, "gradients", f"{args.state}-{args.action}"
     )
+    combined_disk_saliencies = {}
     for label, fmap, data_dict, sal in results:
         file_dir = os.path.join(base_dir, label)
         os.makedirs(file_dir, exist_ok=True)
         logging.info(f"Collected features for {label}: {fmap}")
         save_results(data_dict, file_dir)
         # visualize_gradients_subgraphs(data_dict, args.state, file_dir, fmap, sal)
-        visualize_saliency_comparison(
+        disk_saliency = visualize_saliency_comparison(
             saliency_data=sal,
             state=state,
             file_dir=file_dir,
             model_label=label.replace("_", " ").capitalize(),
             base_color=ABLATION_COLORS.get(label, "#000000"),
         )
+        combined_disk_saliencies[label] = disk_saliency
+
+    combined_overview_path = os.path.join(base_dir, "gradients_disk_strip_all.png")
+    visualize_saliency_strip_grid(
+        all_disk_saliency=combined_disk_saliencies,
+        state=state,
+        action=action,
+        save_path=combined_overview_path,
+        base_colors=ABLATION_COLORS,
+    )
+
 
     logging.info("Gradient analysis completed and results saved.")

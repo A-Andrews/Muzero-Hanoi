@@ -170,20 +170,23 @@ for e, d in enumerate(directories_bar):
     mu_zero_avg = results[0][:, 1].mean()
 
     times_to_reach = []
+    time_errs = []
     never_reached_mask = []
     for j, r in enumerate(results):
         indices = np.where(r[:, 1] <= mu_zero_avg)[0]
         if len(indices) > 0:
             times_to_reach.append(r[indices[0], 0])
+            time_errs.append(r[indices[0], 2] if r.shape[1] > 2 else 0)
             never_reached_mask.append(False)
         else:
             times_to_reach.append(r[-1, 0])
+            time_errs.append(r[-1, 2] if r.shape[1] > 2 else 0)
             never_reached_mask.append(True)
 
     bars = axs_bar[e].bar(
         names,
         times_to_reach,
-        yerr=np.zeros_like(times_to_reach),
+        yerr=time_errs,
         capsize=5,
         color=[col_colors[i % len(col_colors)] for i in range(len(names))],
         edgecolor="none",
@@ -217,17 +220,6 @@ for e, d in enumerate(directories_bar):
                 color="red",
                 fontweight="bold",
             )
-        else:
-            # If you want, annotate the value for normal bars as well
-            axs_bar[e].text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 2,
-                f"{int(bar.get_height())}",
-                ha="center",
-                va="bottom",
-                color="black",
-                fontsize=9,
-            )
 
 fig_bar.tight_layout()
 fig_bar.savefig(
@@ -242,16 +234,18 @@ fig_avg, axs_avg = plt.subplots(
 
 for e, d in enumerate(directories_bar):
     results = []
+    err_results = []
     file_dir = os.path.join(root_dir, d)
     for l in labels:
         # Load and get acting accuracy column
         arr = load_accuracy(file_dir, l)
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
+        err_results.append(arr[:, 2].mean() if arr.shape[1] > 2 else 0)
     # Plot as bar chart
     bars = axs_avg[e].bar(
         names,
         results,
-        yerr=np.zeros_like(results),
+        yerr=err_results,
         capsize=5,
         color=[col_colors[i % len(col_colors)] for i in range(len(names))],
         edgecolor="none",
@@ -266,18 +260,6 @@ for e, d in enumerate(directories_bar):
     if e == len(directories_bar) - 1:
         axs_avg[e].legend(
             bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right"
-        )
-
-    # Annotate bars with their value
-    for idx, bar in enumerate(bars):
-        axs_avg[e].text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 0.5,
-            f"{bar.get_height():.1f}",
-            ha="center",
-            va="bottom",
-            color="black",
-            fontsize=9,
         )
 
 fig_avg.tight_layout()

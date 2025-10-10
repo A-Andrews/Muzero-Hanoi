@@ -108,14 +108,6 @@ def main(timestamp, episodes):
     )
     ax.set_ylabel("Illegal move rate")
     ax.set_ylim(0, max(5, max(rates) * 100 + 5))
-    for bar, rate, std in zip(bars, rates, stds):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + std * 100 + 0.5,
-            f"{rate*100:.1f}",
-            ha="center",
-            va="bottom",
-        )
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     fig.tight_layout()
