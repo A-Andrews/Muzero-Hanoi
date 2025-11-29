@@ -124,6 +124,7 @@ for d in directories:
             yerr=errs,
             fmt="-o",
             color=col_colors[i % len(col_colors)],
+            linewidth=2.5,
             markersize=4,
             capsize=3,
         )

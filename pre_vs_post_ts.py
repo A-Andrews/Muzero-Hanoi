@@ -171,6 +171,7 @@ def main():
                 capsize=4,
                 color=color,
                 linestyle=style["linestyle"],
+                linewidth=4,
                 marker=style["marker"],
                 alpha=0.75,
                 label=f"{name} ({stage})",
