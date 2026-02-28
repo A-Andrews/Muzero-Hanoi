@@ -1,0 +1,16 @@
+# Extra dependencies for the LLM evaluation extension.
+# Install into the existing .venv *after* the base requirements:
+#
+#   source .venv/bin/activate
+#   pip install -r llm_eval/llm_requirements.txt
+#
+# On BMRC you may need to load the CUDA module first so that the GPU-backed
+# torch build is correctly detected (the base requirements.txt already installs
+# torch, so only the HuggingFace stack is added here).
+
+transformers>=4.44.0
+accelerate>=0.33.0
+huggingface_hub>=0.24.0
+sentencepiece>=0.2.0      # needed by some tokenisers (e.g. Llama, Mistral)
+protobuf>=4.25.0          # needed by sentencepiece
+bitsandbytes>=0.43.0      # optional: 8-/4-bit quantisation for smaller VRAM footprint
