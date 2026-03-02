@@ -1,5 +1,6 @@
 import argparse
 import copy
+import json
 import logging
 import os
 
@@ -23,11 +24,11 @@ def ablate_networks(networks, ablate_policy=False, ablate_value=False):
     return ablated
 
 
-def illegal_move_rate(env, networks, mcts, episodes=100, temperature=0.0):
+def illegal_move_rate(env, networks, mcts, episodes=100, temperature=0.0, fixed_start=False):
     """Run episodes with the given networks and return mean and std of illegal move rates."""
     episode_rates = []
     for _ in range(episodes):
-        state = env.random_reset()
+        state = env.reset() if fixed_start else env.random_reset()
         done = False
         illegal = 0
         moves = 0
@@ -49,14 +50,16 @@ def illegal_move_rate(env, networks, mcts, episodes=100, temperature=0.0):
     return mean_rate, std_rate
 
 
-def main(timestamp, episodes):
+def main(timestamp, episodes, n_simulations=25, start=None):
     set_plot_style()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    env = TowersOfHanoi(N=3, max_steps=200)
+    init_state_idx = start if start is not None else 0
+    env = TowersOfHanoi(N=3, max_steps=200, init_state_idx=init_state_idx)
+    fixed_start = start is not None
     mcts = MCTS(
         discount=0.8,
         root_dirichlet_alpha=0.25,
-        n_simulations=25,
+        n_simulations=n_simulations,
         batch_s=1,
         device=device,
     )
@@ -77,19 +80,19 @@ def main(timestamp, episodes):
     logging.info(f"Loaded model from {model_path}")
     logging.info(f"Evaluating illegal move rates over {episodes} episodes...")
 
-    base_rate, base_std = illegal_move_rate(env, networks, mcts, episodes=episodes)
+    base_rate, base_std = illegal_move_rate(env, networks, mcts, episodes=episodes, fixed_start=fixed_start)
     logging.info(
         f"Base illegal move rate: {base_rate * 100:.2f}% \u00b1 {base_std * 100:.2f}%"
     )
 
     pol_net = ablate_networks(networks, ablate_policy=True, ablate_value=False)
-    policy_rate, policy_std = illegal_move_rate(env, pol_net, mcts, episodes=episodes)
+    policy_rate, policy_std = illegal_move_rate(env, pol_net, mcts, episodes=episodes, fixed_start=fixed_start)
     logging.info(
         f"Policy ablated illegal move rate: {policy_rate * 100:.2f}% \u00b1 {policy_std * 100:.2f}%"
     )
 
     val_net = ablate_networks(networks, ablate_policy=False, ablate_value=True)
-    value_rate, value_std = illegal_move_rate(env, val_net, mcts, episodes=episodes)
+    value_rate, value_std = illegal_move_rate(env, val_net, mcts, episodes=episodes, fixed_start=fixed_start)
     logging.info(
         f"Value ablated illegal move rate: {value_rate * 100:.2f}% \u00b1 {value_std * 100:.2f}%"
     )
@@ -97,6 +100,26 @@ def main(timestamp, episodes):
     labels = ["Base", "Policy Ablated", "Value Ablated"]
     rates = [base_rate, policy_rate, value_rate]
     stds = [base_std, policy_std, value_std]
+
+    # Save results as JSON for downstream plotting
+    start_map = {0: "ES", 1: "MS", 2: "LS"}
+    if start is not None:
+        diff_label = start_map.get(start, f"start{start}")
+        out_dir = os.path.join("stats", "Hanoi", timestamp, diff_label)
+        os.makedirs(out_dir, exist_ok=True)
+        json_path = os.path.join(out_dir, "muzero_illegal_rates.json")
+        json_data = {
+            "MuZero": {"mean": base_rate, "se": base_std},
+            "Policy ablated\n(Cerebellar)": {"mean": policy_rate, "se": policy_std},
+            "Value ablated\n(PFC lesion)": {"mean": value_rate, "se": value_std},
+            "n_simulations": n_simulations,
+            "episodes": episodes,
+            "start": start,
+        }
+        with open(json_path, "w") as f:
+            json.dump(json_data, f, indent=2)
+        logging.info(f"Saved JSON: {json_path}")
+
     fig, ax = plt.subplots(figsize=(6, 4))
     bars = ax.bar(
         labels,
@@ -111,8 +134,9 @@ def main(timestamp, episodes):
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     fig.tight_layout()
+    suffix = f"_{diff_label}" if start is not None else ""
     plot_path = os.path.join(
-        "stats", "Hanoi", timestamp, f"illegal_move_rate_{timestamp}.png"
+        "stats", "Hanoi", timestamp, f"illegal_move_rate_{timestamp}{suffix}.png"
     )
     os.makedirs(os.path.dirname(plot_path), exist_ok=True)
     fig.savefig(plot_path, dpi=1200)
@@ -136,10 +160,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, default=1, help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--n_simulations", type=int, default=25,
+        help="Number of MCTS simulations per move"
+    )
+    parser.add_argument(
+        "--start", type=int, default=None,
+        help="Starting state index (0=ES/Far, 1=MS/Moderate, 2=LS/Close). "
+             "If not set, uses random starting states."
+    )
     args = parser.parse_args()
 
     setup_logger(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    main(args.timestamp, args.episodes)
+    main(args.timestamp, args.episodes, n_simulations=args.n_simulations, start=args.start)

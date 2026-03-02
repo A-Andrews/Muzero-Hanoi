@@ -1,5 +1,14 @@
 #!/bin/bash
 
+sbatch ablation_scripts/run_policy_value_reward_ablations_close.sh "$@"
+sbatch ablation_scripts/run_policy_value_reward_ablations_mid.sh "$@"
+sbatch ablation_scripts/run_policy_value_reward_ablations_far.sh "$@"
+sbatch ablation_scripts/run_policy_reward_ablations_close.sh "$@"
+sbatch ablation_scripts/run_policy_reward_ablations_mid.sh "$@"
+sbatch ablation_scripts/run_policy_reward_ablations_far.sh "$@"
+sbatch ablation_scripts/run_policy_value_ablations_close.sh "$@"
+sbatch ablation_scripts/run_policy_value_ablations_mid.sh "$@"
+sbatch ablation_scripts/run_policy_value_ablations_far.sh "$@"
 sbatch ablation_scripts/run_value_reward_ablations_close.sh "$@"
 sbatch ablation_scripts/run_value_reward_ablations_far.sh "$@"
 sbatch ablation_scripts/run_value_reward_ablations_mid.sh "$@"

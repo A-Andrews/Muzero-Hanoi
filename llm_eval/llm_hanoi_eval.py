@@ -142,6 +142,71 @@ def load_model_and_tokenizer(model_id: str, cache_dir: str | None, dtype: str):
 
 
 # ---------------------------------------------------------------------------
+# Layer intervention hooks
+# ---------------------------------------------------------------------------
+
+def register_layer_hooks(model, ablate_layer: int, noise_scale: float, noise_layer: int) -> list:
+    """Register forward hooks for layerwise ablation or noise injection.
+
+    Args:
+        ablate_layer: transformer block index to bypass (-1 = disabled).
+            The hook replaces the layer output with its input, effectively
+            skipping that layer's computation (residual pass-through only).
+        noise_scale: std dev of Gaussian noise to inject (0.0 = disabled).
+        noise_layer: which layer to inject noise at (-1 = all layers).
+
+    Returns:
+        list of hook handles — call handle.remove() to clean up.
+    """
+    handles = []
+
+    # Access transformer blocks.  Works for LlamaForCausalLM and most
+    # decoder-only models (model.model.layers or model.transformer.h).
+    try:
+        layers = model.model.layers
+    except AttributeError:
+        try:
+            layers = model.transformer.h
+        except AttributeError:
+            raise ValueError(
+                "Cannot locate transformer layers on this model. "
+                "Expected model.model.layers or model.transformer.h."
+            )
+
+    if ablate_layer >= 0:
+        if ablate_layer >= len(layers):
+            raise ValueError(
+                f"--ablate_layer {ablate_layer} is out of range "
+                f"(model has {len(layers)} layers)."
+            )
+
+        def _ablate_hook(module, inputs, outputs):
+            # outputs is a tuple; first element is the hidden state.
+            # Return the input hidden state unchanged (bypass this layer).
+            in_hidden = inputs[0]
+            return (in_hidden,) + outputs[1:]
+
+        handles.append(layers[ablate_layer].register_forward_hook(_ablate_hook))
+        logging.info(f"Layer ablation hook registered on layer {ablate_layer}.")
+
+    if noise_scale > 0.0:
+        target_layers = range(len(layers)) if noise_layer < 0 else [noise_layer]
+        for idx in target_layers:
+            def _noise_hook(module, inputs, outputs, _scale=noise_scale):
+                hidden = outputs[0]
+                noisy = hidden + torch.randn_like(hidden) * _scale
+                return (noisy,) + outputs[1:]
+
+            handles.append(layers[idx].register_forward_hook(_noise_hook))
+        logging.info(
+            f"Noise hooks registered (scale={noise_scale}) on "
+            f"{'all' if noise_layer < 0 else f'layer {noise_layer}'} layer(s)."
+        )
+
+    return handles
+
+
+# ---------------------------------------------------------------------------
 # Inference
 # ---------------------------------------------------------------------------
 
@@ -459,6 +524,13 @@ def main():
     parser.add_argument("--dtype", choices=["bfloat16", "float16", "float32"], default="bfloat16")
     parser.add_argument("--model_cache_dir", default=None,
                         help="Directory to cache HuggingFace model weights")
+    # --- layer interventions ---
+    parser.add_argument("--ablate_layer", type=int, default=-1,
+                        help="Bypass this transformer block (0-indexed; -1 = disabled)")
+    parser.add_argument("--noise_scale", type=float, default=0.0,
+                        help="Std dev of Gaussian noise injected into hidden states (0=disabled)")
+    parser.add_argument("--noise_layer", type=int, default=-1,
+                        help="Layer to inject noise at (-1 = all layers; only used if noise_scale > 0)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -479,30 +551,60 @@ def main():
     # Load model
     model, tokenizer = load_model_and_tokenizer(args.model, args.model_cache_dir, args.dtype)
 
+    # Build intervention label suffix for file naming
+    intervention_parts = []
+    if args.ablate_layer >= 0:
+        intervention_parts.append(f"ablateL{args.ablate_layer}")
+    if args.noise_scale > 0.0:
+        nl = "all" if args.noise_layer < 0 else str(args.noise_layer)
+        intervention_parts.append(f"noiseS{args.noise_scale}_L{nl}")
+    intervention_label = "_".join(intervention_parts)
+    prompting_label = f"{args.prompting}_{intervention_label}" if intervention_label else args.prompting
+
+    # Register layer intervention hooks (no-op if both args are at defaults)
+    hook_handles = register_layer_hooks(
+        model,
+        ablate_layer=args.ablate_layer,
+        noise_scale=args.noise_scale,
+        noise_layer=args.noise_layer,
+    )
+
     # Select prompt builder
     prompt_fn = PROMPT_BUILDERS[args.prompting]
 
     # Run evaluation
     logging.info("Starting evaluation...")
-    agg = run_evaluation(
-        env=env,
-        model=model,
-        tokenizer=tokenizer,
-        prompt_fn=prompt_fn,
-        start=args.start,
-        episodes=args.episodes,
-        temperature=args.temperature,
-        max_new_tokens=args.max_new_tokens,
-        history_length=args.history_length,
-        n_disks=args.N,
-        seed=args.seed,
-    )
+    try:
+        agg = run_evaluation(
+            env=env,
+            model=model,
+            tokenizer=tokenizer,
+            prompt_fn=prompt_fn,
+            start=args.start,
+            episodes=args.episodes,
+            temperature=args.temperature,
+            max_new_tokens=args.max_new_tokens,
+            history_length=args.history_length,
+            n_disks=args.N,
+            seed=args.seed,
+        )
+    finally:
+        for h in hook_handles:
+            h.remove()
+
+    # Attach intervention metadata to JSON output
+    if intervention_label:
+        agg["intervention"] = {
+            "ablate_layer": args.ablate_layer,
+            "noise_scale": args.noise_scale,
+            "noise_layer": args.noise_layer,
+        }
 
     # Save results
     save_dir = os.path.join(
         PROJECT_ROOT, "stats", "Hanoi", args.timestamp, file_indx
     )
-    save_results(agg, save_dir, args.model_label, args.prompting)
+    save_results(agg, save_dir, args.model_label, prompting_label)
     logging.info("Done.")
 
 

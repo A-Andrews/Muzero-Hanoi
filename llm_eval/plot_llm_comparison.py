@@ -43,9 +43,9 @@ from utils import PLOT_COLORS, set_plot_style
 
 # MuZero conditions in the order used by the existing plotting code
 MUZERO_CONDITIONS = [
-    ("Muzero_", "MuZero"),
-    ("ResetLatentVal_", "Value ablated\n(PFC lesion)"),
-    ("ResetLatentPol_", "Policy ablated\n(Cerebellar)"),
+    ("Muzero", "MuZero"),
+    ("ResetLatentVal", "Value ablated\n(PFC lesion)"),
+    ("ResetLatentPol", "Policy ablated\n(Cerebellar)"),
 ]
 
 DIFFICULTIES = [
@@ -89,12 +89,6 @@ def load_llm_json(directory: str, file_stem: str) -> dict | None:
         return json.load(f)
 
 
-def aggregate_from_accuracy(arr: np.ndarray) -> tuple[float, float]:
-    """Return (mean_error, se_error) from an accuracy array."""
-    mean_e = float(arr[:, 1].mean())
-    se_e = float(arr[:, 2].mean()) if arr.shape[1] > 2 else 0.0
-    return mean_e, se_e
-
 
 # ---------------------------------------------------------------------------
 # Plot helpers
@@ -122,6 +116,7 @@ def _bar_group(
         color=colors,
         edgecolor="none",
         hatch=hatches,
+        error_kw=dict(zorder=2),
     )
     ax.set_xticks(x)
     ax.set_xticklabels(names, rotation=30, ha="right", fontsize=7)
@@ -140,17 +135,23 @@ def _bar_group(
 def main():
     parser = argparse.ArgumentParser(description="Plot LLM vs MuZero comparison")
     parser.add_argument("--timestamp", required=True)
-    parser.add_argument("--model_label", required=True,
-                        help="Model label used when running llm_hanoi_eval.py")
-    parser.add_argument("--llm_display_names", nargs="+",
-                        default=["LLM (zero-shot)", "LLM (CoT)"],
-                        help="Display names for zero_shot and cot conditions")
+    parser.add_argument("--model_labels", nargs="+", required=True,
+                        help="Model labels used when running llm_hanoi_eval.py")
+    parser.add_argument("--llm_display_names", nargs="+", default=None,
+                        help="Display names for each (model, strategy) pair")
     parser.add_argument("--prompting_strategies", nargs="+",
                         default=["zero_shot", "cot"],
                         help="Prompting strategies to include (must match saved file stems)")
+    parser.add_argument("--no_latex", action="store_true",
+                        help="Disable LaTeX rendering (use if LaTeX not available)")
+    parser.add_argument("--muzero_runs", type=int, default=5,
+                        help="Number of MuZero evaluation runs (for SD→SE conversion)")
     args = parser.parse_args()
 
     set_plot_style()
+    if args.no_latex:
+        import matplotlib as mpl
+        mpl.rcParams["text.usetex"] = False
 
     root_dir = os.path.join(PROJECT_ROOT, "stats", "Hanoi", args.timestamp)
 
@@ -160,77 +161,92 @@ def main():
 
     # Assign colours: MuZero conditions use PLOT_COLORS[0..2], LLMs get extras
     extra_colors = ["#8EC8C8", "#D4A5D4", "#F5C281", "#A8D5A2"]
-    llm_colors = extra_colors[: len(args.prompting_strategies)]
+    n_llm = len(args.model_labels) * len(args.prompting_strategies)
 
-    # Determine LLM display names (pad/truncate to match prompting_strategies)
-    display_names = list(args.llm_display_names)
-    while len(display_names) < len(args.prompting_strategies):
-        strat = args.prompting_strategies[len(display_names)]
-        display_names.append(f"LLM ({strat})")
+    # Build display names: one per (model, strategy) pair
+    if args.llm_display_names is not None:
+        display_names = list(args.llm_display_names)
+    else:
+        display_names = []
+    while len(display_names) < n_llm:
+        idx = len(display_names)
+        m_idx = idx // len(args.prompting_strategies)
+        s_idx = idx % len(args.prompting_strategies)
+        display_names.append(
+            f"{args.model_labels[m_idx]} ({args.prompting_strategies[s_idx]})"
+        )
 
     # -----------------------------------------------------------------------
-    # Figure 1: mean excess moves per difficulty
-    # Figure 2: illegal move rate per difficulty
+    # Figure 1: MuZero (n_sims=150) vs LLM — mean excess moves
+    # Each panel = one difficulty, independent y-axes so bars are readable.
+    # Value labels above each bar for clarity.
     # -----------------------------------------------------------------------
 
     fig_err, axs_err = plt.subplots(
         1, len(DIFFICULTIES),
-        figsize=(7.5, 3),
-        sharey=True,
+        figsize=(7.5, 3.5),
+        sharey=False,
     )
+
+    # -----------------------------------------------------------------------
+    # Figure 2: illegal move rate (LLM only — MuZero doesn't track this)
+    # -----------------------------------------------------------------------
+
     fig_ill, axs_ill = plt.subplots(
         1, len(DIFFICULTIES),
         figsize=(7.5, 3),
-        sharey=True,
+        sharey=False,
     )
 
     for col, (diff_dir, diff_title) in enumerate(DIFFICULTIES):
         file_dir = os.path.join(root_dir, diff_dir)
 
-        # ---- error means & SEs ----
         err_names, err_means, err_ses, err_colors = [], [], [], []
         ill_names, ill_means, ill_ses, ill_colors = [], [], [], []
 
-        # MuZero conditions
+        # MuZero conditions at n_sims=150 (last row of accuracy array)
+        # Note: column 2 of _actingAccuracy_error.pt is SD (not SE).
+        # Convert to SE by dividing by sqrt(muzero_runs).
+        muzero_se_factor = 1.0 / np.sqrt(args.muzero_runs)
         for i, (label, name) in enumerate(MUZERO_CONDITIONS):
             arr = load_accuracy(file_dir, label)
             if arr is None:
                 continue
-            mean_e, se_e = aggregate_from_accuracy(arr)
+            mean_e = float(arr[-1, 1])
+            sd_e = float(arr[-1, 2]) if arr.shape[1] > 2 else 0.0
+            se_e = sd_e * muzero_se_factor
             err_names.append(name)
             err_means.append(mean_e)
             err_ses.append(se_e)
             err_colors.append(PLOT_COLORS[i % len(PLOT_COLORS)])
-            # MuZero doesn't have illegal rate JSON — skip for Figure 2
-            # (it tracks error, not illegal rate per episode, in the .pt files)
 
-        # LLM conditions
-        for strat, disp_name, col_c in zip(
-            args.prompting_strategies, display_names, llm_colors
-        ):
-            file_stem = f"LLM_{args.model_label}_{strat}"
-            data = load_llm_json(file_dir, file_stem)
-            if data is None:
-                continue
+        # LLM conditions (iterate models × strategies)
+        llm_idx = 0
+        for model_label in args.model_labels:
+            for strat in args.prompting_strategies:
+                file_stem = f"LLM_{model_label}_{strat}"
+                disp_name = display_names[llm_idx]
+                col_c = extra_colors[llm_idx % len(extra_colors)]
+                llm_idx += 1
+                data = load_llm_json(file_dir, file_stem)
+                if data is None:
+                    continue
 
-            # Error
-            err_names.append(disp_name)
-            err_means.append(data["mean_error"])
-            err_ses.append(data["se_error"])
-            err_colors.append(col_c)
+                # Error
+                err_names.append(disp_name)
+                err_means.append(data["mean_error"])
+                err_ses.append(data["se_error"])
+                err_colors.append(col_c)
 
-            # Illegal move rate
-            ill_names.append(disp_name)
-            ill_means.append(data["mean_illegal_rate"] * 100)   # percent
-            ill_ses.append(data["se_illegal_rate"] * 100)
-            ill_colors.append(col_c)
+                # Illegal move rate
+                ill_names.append(disp_name)
+                ill_means.append(data["mean_illegal_rate"] * 100)
+                ill_ses.append(data["se_illegal_rate"] * 100)
+                ill_colors.append(col_c)
 
-        # Also load MuZero illegal rate if available (separate json not produced
-        # by default — skip gracefully)
-
-        # ---- error bars ----
+        # ---- error bars with value labels ----
         ax_e = axs_err[col]
-        _bar_group(
+        bars = _bar_group(
             ax_e,
             err_names,
             err_means,
@@ -239,12 +255,24 @@ def main():
             title=diff_title,
             ylabel="Mean excess moves" if col == 0 else None,
         )
-        ax_e.set_ylim(bottom=0)
+        # Set y-axis with headroom for value labels
+        max_val = max(err_means) if err_means else 1.0
+        max_bar = max(m + s for m, s in zip(err_means, err_ses)) if err_means else 1.0
+        ax_e.set_ylim(bottom=0, top=max_bar * 1.18)
+        # Add value labels above error bar tips
+        offset = max_val * 0.03
+        for bar, val, se in zip(bars, err_means, err_ses):
+            ax_e.text(
+                bar.get_x() + bar.get_width() / 2,
+                val + se + offset,
+                f"{val:.1f}",
+                ha="center", va="bottom", fontsize=6, zorder=5,
+            )
 
-        # ---- illegal rate bars ----
+        # ---- illegal rate bars with value labels ----
         ax_i = axs_ill[col]
         if ill_means:
-            _bar_group(
+            bars_ill = _bar_group(
                 ax_i,
                 ill_names,
                 ill_means,
@@ -253,7 +281,16 @@ def main():
                 title=diff_title,
                 ylabel="Illegal move rate (%)" if col == 0 else None,
             )
-            ax_i.set_ylim(bottom=0)
+            max_ill = max(m + s for m, s in zip(ill_means, ill_ses)) if ill_means else 1.0
+            ax_i.set_ylim(bottom=0, top=max_ill * 1.18)
+            ill_offset = max(ill_means) * 0.03
+            for bar, val, se in zip(bars_ill, ill_means, ill_ses):
+                ax_i.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    val + se + ill_offset,
+                    f"{val:.1f}",
+                    ha="center", va="bottom", fontsize=6, zorder=5,
+                )
         else:
             ax_i.set_visible(False)
 
@@ -262,88 +299,10 @@ def main():
 
     err_path = os.path.join(root_dir, f"LLM_MuZero_ErrorComparison_{args.timestamp}.png")
     ill_path = os.path.join(root_dir, f"LLM_MuZero_IllegalRate_{args.timestamp}.png")
-    fig_err.savefig(err_path, dpi=300)
-    fig_ill.savefig(ill_path, dpi=300)
+    fig_err.savefig(err_path, dpi=300, bbox_inches="tight")
+    fig_ill.savefig(ill_path, dpi=300, bbox_inches="tight")
     print(f"Saved: {err_path}")
     print(f"Saved: {ill_path}")
-
-    # -----------------------------------------------------------------------
-    # Figure 3: line plot overlay
-    # Each panel = one difficulty; MuZero curves + LLM horizontal lines.
-    # -----------------------------------------------------------------------
-
-    fig_line, axs_line = plt.subplots(
-        1, len(DIFFICULTIES),
-        figsize=(7.5, 3),
-        sharey=True,
-    )
-
-    for col, (diff_dir, diff_title) in enumerate(DIFFICULTIES):
-        file_dir = os.path.join(root_dir, diff_dir)
-        ax = axs_line[col]
-
-        # MuZero curves
-        for i, (label, name) in enumerate(MUZERO_CONDITIONS):
-            arr = load_accuracy(file_dir, label)
-            if arr is None:
-                continue
-            errs = arr[:, 2] if arr.shape[1] > 2 else np.zeros(len(arr))
-            ax.errorbar(
-                arr[:, 0], arr[:, 1], yerr=errs,
-                fmt="-o",
-                color=PLOT_COLORS[i % len(PLOT_COLORS)],
-                linewidth=2,
-                markersize=4,
-                capsize=3,
-                label=name,
-            )
-
-        # LLM horizontal lines
-        for strat, disp_name, col_c in zip(
-            args.prompting_strategies, display_names, llm_colors
-        ):
-            file_stem = f"LLM_{args.model_label}_{strat}"
-            data = load_llm_json(file_dir, file_stem)
-            if data is None:
-                continue
-            mean_e = data["mean_error"]
-            se_e = data["se_error"]
-
-            # Find x-range from MuZero data for the span of the hline
-            arr_ref = load_accuracy(file_dir, "Muzero_")
-            if arr_ref is not None:
-                xmin, xmax = arr_ref[:, 0].min(), arr_ref[:, 0].max()
-            else:
-                xmin, xmax = 0, 150
-
-            ax.hlines(
-                mean_e, xmin, xmax,
-                colors=col_c,
-                linewidths=2,
-                linestyles="--",
-                label=disp_name,
-            )
-            ax.fill_between(
-                [xmin, xmax],
-                mean_e - se_e,
-                mean_e + se_e,
-                color=col_c,
-                alpha=0.15,
-            )
-
-        ax.set_title(diff_title)
-        ax.spines["right"].set_visible(False)
-        ax.spines["top"].set_visible(False)
-        if col == 0:
-            ax.set_ylabel("Excess moves (error)")
-        ax.set_xlabel("MCTS simulations per step")
-        if col == len(DIFFICULTIES) - 1:
-            ax.legend(fontsize=7, bbox_to_anchor=(1.05, 1), loc="upper left")
-
-    fig_line.tight_layout()
-    line_path = os.path.join(root_dir, f"LLM_MuZero_LinePlot_{args.timestamp}.png")
-    fig_line.savefig(line_path, dpi=300)
-    print(f"Saved: {line_path}")
 
 
 if __name__ == "__main__":
