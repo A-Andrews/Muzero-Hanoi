@@ -23,7 +23,8 @@
 #       --sweep_type noise \
 #       --noise_scale 0.5
 #
-# Layer sample: [0, 4, 8, 16, 24, 31]  — logarithmic coverage of 32 layers
+# Default layer sample: [0, 4, 8, 16, 24, 31]  — logarithmic coverage of 32 layers
+# Override with --layers "0 4 8 14 20 27" for models with different layer counts
 
 # --------------------------------------------------------------------------
 # Parse named arguments
@@ -35,6 +36,7 @@ START=0
 EPISODES=50
 SWEEP_TYPE="ablation"
 NOISE_SCALE=0.5
+LAYERS_STR=""
 # Remaining args forwarded to each individual job (e.g. --prompting cot)
 EXTRA_ARGS=""
 
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         --episodes)    EPISODES="$2";     shift 2 ;;
         --sweep_type)  SWEEP_TYPE="$2";   shift 2 ;;
         --noise_scale) NOISE_SCALE="$2";  shift 2 ;;
+        --layers)      LAYERS_STR="$2";   shift 2 ;;
         *)             EXTRA_ARGS="$EXTRA_ARGS $1 $2"; shift 2 ;;
     esac
 done
@@ -56,8 +59,12 @@ if [[ -z "$TIMESTAMP" || -z "$MODEL" || -z "$MODEL_LABEL" ]]; then
     exit 1
 fi
 
-# Logarithmic layer sample across 32 layers
-LAYERS=(0 4 8 16 24 31)
+# Layer sample — override with --layers for non-32-layer models
+if [[ -n "$LAYERS_STR" ]]; then
+    read -ra LAYERS <<< "$LAYERS_STR"
+else
+    LAYERS=(0 4 8 16 24 31)
+fi
 
 echo "Submitting ${SWEEP_TYPE} sweep over layers: ${LAYERS[*]}"
 echo "  timestamp=${TIMESTAMP}  model_label=${MODEL_LABEL}  start=${START}  episodes=${EPISODES}"

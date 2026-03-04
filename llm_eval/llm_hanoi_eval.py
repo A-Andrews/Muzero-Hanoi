@@ -60,14 +60,23 @@ def pegs_to_action(from_peg: int, to_peg: int) -> int:
     return MOVES.index((from_peg, to_peg))
 
 
+def _last_match(pattern: str, text: str, flags: int = 0) -> re.Match | None:
+    """Return the *last* match of ``pattern`` in ``text``."""
+    matches = list(re.finditer(pattern, text, flags))
+    return matches[-1] if matches else None
+
+
 def parse_move(response: str) -> tuple[int, int] | None:
     """Extract (from_peg, to_peg) from LLM text — all 0-indexed.
+
+    Uses the **last** match in the response so that CoT reasoning about
+    intermediate or illegal moves doesn't shadow the final answer.
 
     Tries several patterns in decreasing specificity.  Returns None if no
     valid move can be extracted.
     """
     # Pattern 1: canonical "Move from Peg X to Peg Y"
-    m = re.search(
+    m = _last_match(
         r"move\s+from\s+peg\s+([123])\s+to\s+peg\s+([123])",
         response,
         re.IGNORECASE,
@@ -78,10 +87,10 @@ def parse_move(response: str) -> tuple[int, int] | None:
             return fp, tp
 
     # Pattern 2: looser — "from X to Y" with optional "Peg"
-    m = re.search(
-        r"from\s+(?:peg\s+)?([123]).*?to\s+(?:peg\s+)?([123])",
+    m = _last_match(
+        r"from\s+(?:peg\s+)?([123])\s+to\s+(?:peg\s+)?([123])",
         response,
-        re.IGNORECASE | re.DOTALL,
+        re.IGNORECASE,
     )
     if m:
         fp, tp = int(m.group(1)) - 1, int(m.group(2)) - 1
@@ -89,7 +98,11 @@ def parse_move(response: str) -> tuple[int, int] | None:
             return fp, tp
 
     # Pattern 3: two lone digits separated by arrow or dash
-    m = re.search(r"\b([123])\s*(?:→|->|to|-)\s*([123])\b", response, re.IGNORECASE)
+    m = _last_match(
+        r"\b([123])\s*(?:→|->|to|-)\s*([123])\b",
+        response,
+        re.IGNORECASE,
+    )
     if m:
         fp, tp = int(m.group(1)) - 1, int(m.group(2)) - 1
         if fp != tp:
@@ -217,8 +230,12 @@ def generate_response(
     temperature: float,
     max_new_tokens: int,
 ) -> str:
-    """Tokenise prompt, generate, decode only the new tokens."""
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    """Tokenise prompt using the model's chat template, generate, decode only the new tokens."""
+    messages = [{"role": "user", "content": prompt}]
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    inputs = tokenizer(text, return_tensors="pt").to(model.device)
     input_len = inputs["input_ids"].shape[1]
 
     with torch.no_grad():
