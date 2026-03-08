@@ -100,7 +100,7 @@ def build_zero_shot_prompt(
 
     if history:
         parts += ["", "Previous moves (most recent last):"]
-        for m in history[-5:]:          # show at most last 5
+        for m in history:               # caller controls window size via history_length
             parts.append(f"  {m}")
 
     parts += ["", ANSWER_FORMAT]
@@ -124,7 +124,7 @@ def build_cot_prompt(
 
     if history:
         parts += ["", "Previous moves (most recent last):"]
-        for m in history[-5:]:
+        for m in history:               # caller controls window size via history_length
             parts.append(f"  {m}")
 
     parts += [

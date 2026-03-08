@@ -60,6 +60,19 @@ def pegs_to_action(from_peg: int, to_peg: int) -> int:
     return MOVES.index((from_peg, to_peg))
 
 
+def _illegal_reason(state: tuple, from_peg: int, to_peg: int, n_disks: int) -> str:
+    """Return a human-readable reason why a move is illegal (0-indexed pegs in, 1-indexed in output)."""
+    disks_from = sorted([i + 1 for i in range(n_disks) if state[i] == from_peg])
+    disks_to = sorted([i + 1 for i in range(n_disks) if state[i] == to_peg])
+
+    if not disks_from:
+        return f"Peg {from_peg + 1} is empty, there is no disk to move"
+    if disks_to and min(disks_to) < min(disks_from):
+        return (f"Disk {min(disks_from)} cannot be placed on Peg {to_peg + 1} "
+                f"because Disk {min(disks_to)} (smaller) is already there")
+    return "move not allowed"
+
+
 def _last_match(pattern: str, text: str, flags: int = 0) -> re.Match | None:
     """Return the *last* match of ``pattern`` in ``text``."""
     matches = list(re.finditer(pattern, text, flags))
@@ -265,6 +278,7 @@ def run_episode(
     max_new_tokens: int,
     history_length: int,
     n_disks: int,
+    illegal_feedback: bool = False,
 ) -> dict:
     """Run one episode and return per-episode statistics.
 
@@ -316,6 +330,12 @@ def run_episode(
 
         if illegal_move:
             illegal_count += 1
+            if illegal_feedback:
+                if parsed is not None:
+                    reason = _illegal_reason(current_state, from_peg, to_peg, n_disks)
+                    move_str = f"[ILLEGAL] {move_str} — {reason}"
+                else:
+                    move_str = f"{move_str} — [ILLEGAL] move was not allowed"
 
         if rwd == 100:
             solved = True
@@ -374,6 +394,7 @@ def run_evaluation(
     history_length: int,
     n_disks: int,
     seed: int,
+    illegal_feedback: bool = False,
 ) -> dict:
     """Run ``episodes`` episodes and return aggregate statistics.
 
@@ -415,6 +436,7 @@ def run_evaluation(
                 max_new_tokens,
                 history_length,
                 n_disks,
+                illegal_feedback=illegal_feedback,
             )
             episode_results.append(result)
 
@@ -464,7 +486,7 @@ def save_results(
     file_stem = f"LLM_{label}_{prompting}"
 
     mean_e = agg["mean_error"]
-    std_e = agg["se_error"]   # use SE for error bars (consistent with multi-run code)
+    std_e = agg["std_error"]  # use std for error bars (consistent with multi-run code)
 
     # actingAccuracy.pt  — shape (1, 2): [[n_sims, mean_error]]
     acc_tensor = torch.tensor([[0.0, mean_e]])
@@ -534,6 +556,9 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--history_length", type=int, default=0,
                         help="Number of previous moves to include in prompt (0=no history)")
+    parser.add_argument("--illegal_feedback", action="store_true",
+                        help="Annotate illegal moves in history with rejection reason "
+                             "(only meaningful when --history_length > 0)")
     # --- LLM inference ---
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max_new_tokens", type=int, default=300,
@@ -556,6 +581,12 @@ def main():
         encoding="utf-8",
     )
 
+    if args.illegal_feedback and args.history_length == 0:
+        logging.warning(
+            "--illegal_feedback has no effect when --history_length=0 "
+            "(the model never sees move history). Consider setting --history_length 5."
+        )
+
     # Set up environment
     env = TowersOfHanoi(N=args.N, max_steps=args.max_steps)
     file_indx = get_starting_state(env, args.start)
@@ -563,6 +594,7 @@ def main():
     logging.info(
         f"LLM eval: model={args.model}  prompting={args.prompting}"
         f"  difficulty={file_indx}  episodes={args.episodes}"
+        f"  history_length={args.history_length}  illegal_feedback={args.illegal_feedback}"
     )
 
     # Load model
@@ -577,6 +609,12 @@ def main():
         intervention_parts.append(f"noiseS{args.noise_scale}_L{nl}")
     intervention_label = "_".join(intervention_parts)
     prompting_label = f"{args.prompting}_{intervention_label}" if intervention_label else args.prompting
+
+    # History and feedback suffixes
+    if args.history_length > 0:
+        prompting_label += f"_h{args.history_length}"
+    if args.illegal_feedback:
+        prompting_label += "_illfb"
 
     # Register layer intervention hooks (no-op if both args are at defaults)
     hook_handles = register_layer_hooks(
@@ -604,6 +642,7 @@ def main():
             history_length=args.history_length,
             n_disks=args.N,
             seed=args.seed,
+            illegal_feedback=args.illegal_feedback,
         )
     finally:
         for h in hook_handles:
@@ -615,6 +654,12 @@ def main():
             "ablate_layer": args.ablate_layer,
             "noise_scale": args.noise_scale,
             "noise_layer": args.noise_layer,
+        }
+
+    if args.history_length > 0 or args.illegal_feedback:
+        agg["history_config"] = {
+            "history_length": args.history_length,
+            "illegal_feedback": args.illegal_feedback,
         }
 
     # Save results

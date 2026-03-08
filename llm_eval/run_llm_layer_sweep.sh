@@ -49,8 +49,14 @@ while [[ $# -gt 0 ]]; do
         --episodes)    EPISODES="$2";     shift 2 ;;
         --sweep_type)  SWEEP_TYPE="$2";   shift 2 ;;
         --noise_scale) NOISE_SCALE="$2";  shift 2 ;;
-        --layers)      LAYERS_STR="$2";   shift 2 ;;
-        *)             EXTRA_ARGS="$EXTRA_ARGS $1 $2"; shift 2 ;;
+        --layers)
+            shift  # consume --layers
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                LAYERS_STR="$LAYERS_STR $1"
+                shift
+            done
+            ;;
+        *)             EXTRA_ARGS="$EXTRA_ARGS $1"; shift ;;
     esac
 done
 

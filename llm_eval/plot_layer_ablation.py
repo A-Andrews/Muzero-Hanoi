@@ -37,6 +37,8 @@ parser.add_argument("--noise_scale", type=float, default=0.5,
                     help="Noise scale used in the noise sweep (for filename lookup)")
 parser.add_argument("--layers", type=int, nargs="+", default=[0, 4, 8, 16, 24, 31],
                     help="Layer indices that were swept (must match run_llm_layer_sweep.sh)")
+parser.add_argument("--no_latex", action="store_true",
+                    help="Disable LaTeX rendering (for environments without LaTeX)")
 args = parser.parse_args()
 
 DIFFICULTY_MAP = {0: "ES", 1: "MS", 2: "LS"}
@@ -95,6 +97,8 @@ if not ablation_layers and not noise_layers:
     sys.exit(1)
 
 set_plot_style()
+if args.no_latex:
+    mpl.rcParams["text.usetex"] = False
 
 font_s = 8
 mpl.rc("font", size=font_s)
@@ -148,7 +152,8 @@ if noise_layers:
         linewidth=2.0,
         markersize=5,
         capsize=3,
-        label=f"Noise injection ($\\sigma={args.noise_scale}$)",
+        label=(f"Noise injection (σ={args.noise_scale})" if args.no_latex
+               else f"Noise injection ($\\sigma={args.noise_scale}$)"),
         zorder=2,
     )
 
