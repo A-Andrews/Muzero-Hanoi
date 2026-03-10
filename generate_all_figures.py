@@ -72,6 +72,16 @@ LLM_DISPLAY_NAMES = ["Qwen-2.5 7B\n(zero-shot)", "Qwen-2.5 7B\n(CoT)"]
 LLM_FEEDBACK_STRATEGIES = ["cot", "cot_h5", "cot_h5_illfb"]
 LLM_FEEDBACK_DISPLAY = ["CoT", "CoT + horizon", "CoT + horizon\n+ illegal fb"]
 
+# Both LLM models for cross-model comparison figures
+LLM_MODELS = [
+    ("qwen25_7b", "Qwen-2.5 7B"),
+    ("llama3_8b", "Llama-3.1 8B"),
+]
+LLM_MODEL_COLORS = {
+    "qwen25_7b": ["#8EC8C8", "#D4A5D4"],   # zero-shot, cot
+    "llama3_8b": ["#F5C281", "#A8D5A2"],    # zero-shot, cot
+}
+
 LAYER_INDICES = [0, 4, 8, 14, 20, 27]
 NOISE_SCALE = 0.5
 
@@ -147,7 +157,7 @@ def _bar_group(ax, names, means, errors, colors, title, ylabel=None,
         error_kw=dict(zorder=2),
     )
     ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=30, ha="right", fontsize=7)
+    ax.set_xticklabels(names, rotation=40, ha="right", fontsize=6)
     ax.set_title(title)
     if ylabel:
         ax.set_ylabel(ylabel)
@@ -211,7 +221,7 @@ def fig_muzero_ablation_grid(root_dir: str, timestamp: str):
             if e == len(DIFFICULTIES_GRID) - 1:
                 axs[e, i].set_xlabel("N. simulations per step\n(planning time)", fontsize=font_s)
 
-    out = os.path.join(root_dir, f"MuZero_Ablation_Comparison_{timestamp}.png")
+    out = os.path.join(root_dir, f"MuZero_Ablation_Comparison_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -282,7 +292,7 @@ def fig_muzero_bar_charts(root_dir: str, timestamp: str):
                 )
 
     fig_bar.tight_layout()
-    out = os.path.join(root_dir, f"MuZero_Ablation_BarCharts_{timestamp}.png")
+    out = os.path.join(root_dir, f"MuZero_Ablation_BarCharts_{timestamp}.pdf")
     fig_bar.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig_bar)
     print(f"  Saved: {out}")
@@ -330,7 +340,7 @@ def fig_muzero_average_performance(root_dir: str, timestamp: str):
             axs_avg[e].legend(bars, names, fontsize=font_s, bbox_to_anchor=(1.05, 1), loc="upper right")
 
     fig_avg.tight_layout()
-    out = os.path.join(root_dir, f"MuZero_Ablation_AveragePerformance_{timestamp}.png")
+    out = os.path.join(root_dir, f"MuZero_Ablation_AveragePerformance_{timestamp}.pdf")
     fig_avg.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig_avg)
     print(f"  Saved: {out}")
@@ -341,12 +351,27 @@ def fig_muzero_average_performance(root_dir: str, timestamp: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fig_llm_muzero_error(root_dir: str, timestamp: str, muzero_runs: int):
-    """Bar chart: MuZero (n_sims=150) vs LLM prompting strategies — mean error."""
+    """Bar chart: MuZero (n_sims=150) vs LLM prompting strategies — mean error.
+
+    Includes both Qwen and Llama (if data exists).
+    """
     font_s = 7
     mpl.rc("font", size=font_s)
     se_factor = 1.0 / np.sqrt(muzero_runs)
 
-    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(7.5, 3.5), sharey=False)
+    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(12, 3.5), sharey=False)
+
+    # Short display names for MuZero conditions
+    muzero_short_labels = {
+        "MuZero": "MuZero",
+        "Value ablated\n(PFC lesion)": "Value abl.\n(PFC)",
+        "Policy ablated\n(Cerebellar)": "Policy abl.\n(Cereb.)",
+    }
+    # Short model names for LLM bars
+    llm_short_names = {
+        "qwen25_7b": "Qwen",
+        "llama3_8b": "Llama",
+    }
 
     for col, (diff_dir, diff_title) in enumerate(DIFFICULTIES):
         file_dir = os.path.join(root_dir, diff_dir)
@@ -359,21 +384,25 @@ def fig_llm_muzero_error(root_dir: str, timestamp: str, muzero_runs: int):
                 continue
             mean_e = float(arr[-1, 1])
             sd_e = float(arr[-1, 2]) if arr.shape[1] > 2 else 0.0
-            names.append(name)
+            names.append(muzero_short_labels.get(name, name))
             means.append(mean_e)
             ses.append(sd_e * se_factor)
             colors.append(PLOT_COLORS[i % len(PLOT_COLORS)])
 
-        # LLM conditions
-        for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
-            file_stem = f"LLM_{LLM_MODEL_LABEL}_{strat}"
-            data = load_llm_json(file_dir, file_stem)
-            if data is None:
-                continue
-            names.append(LLM_DISPLAY_NAMES[j])
-            means.append(data["mean_error"])
-            ses.append(data["se_error"])
-            colors.append(EXTRA_COLORS[j % len(EXTRA_COLORS)])
+        # LLM conditions — both models
+        for model_label, model_display in LLM_MODELS:
+            model_colors = LLM_MODEL_COLORS[model_label]
+            short_name = llm_short_names.get(model_label, model_display)
+            for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
+                file_stem = f"LLM_{model_label}_{strat}"
+                data = load_llm_json(file_dir, file_stem)
+                if data is None:
+                    continue
+                strat_display = "0-shot" if strat == "zero_shot" else strat
+                names.append(f"{short_name}\n({strat_display})")
+                means.append(data["mean_error"])
+                ses.append(data["se_error"])
+                colors.append(model_colors[j % len(model_colors)])
 
         ax = axs[col]
         _bar_group(ax, names, means, ses, colors, diff_title,
@@ -383,7 +412,7 @@ def fig_llm_muzero_error(root_dir: str, timestamp: str, muzero_runs: int):
             ax.set_ylim(bottom=0, top=max_bar * 1.18)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"LLM_MuZero_ErrorComparison_{timestamp}.png")
+    out = os.path.join(root_dir, f"LLM_MuZero_ErrorComparison_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -397,7 +426,15 @@ def fig_solve_rate(root_dir: str, timestamp: str, muzero_runs: int):
     font_s = 7
     mpl.rc("font", size=font_s)
 
-    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(7.5, 3.5), sharey=True)
+    # Short labels (same as fig_llm_muzero_error)
+    muzero_short_labels = {
+        "MuZero": "MuZero",
+        "Value ablated\n(PFC lesion)": "Value abl.\n(PFC)",
+        "Policy ablated\n(Cerebellar)": "Policy abl.\n(Cereb.)",
+    }
+    llm_short_names = {"qwen25_7b": "Qwen", "llama3_8b": "Llama"}
+
+    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(12, 3.5), sharey=True)
 
     for col, (diff_dir, diff_title) in enumerate(DIFFICULTIES):
         file_dir = os.path.join(root_dir, diff_dir)
@@ -408,20 +445,24 @@ def fig_solve_rate(root_dir: str, timestamp: str, muzero_runs: int):
             if arr is None:
                 continue
             sr, se = muzero_solve_rate(arr, diff_dir, muzero_runs)
-            names.append(name)
+            names.append(muzero_short_labels.get(name, name))
             rates.append(sr * 100)
             ses.append(se * 100)
             colors.append(PLOT_COLORS[i % len(PLOT_COLORS)])
 
-        for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
-            file_stem = f"LLM_{LLM_MODEL_LABEL}_{strat}"
-            data = load_llm_json(file_dir, file_stem)
-            if data is None:
-                continue
-            names.append(LLM_DISPLAY_NAMES[j])
-            rates.append(data["solve_rate"] * 100)
-            ses.append(data.get("se_solve_rate", 0.0) * 100)
-            colors.append(EXTRA_COLORS[j % len(EXTRA_COLORS)])
+        for model_label, model_display in LLM_MODELS:
+            model_colors = LLM_MODEL_COLORS[model_label]
+            short_name = llm_short_names.get(model_label, model_display)
+            for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
+                file_stem = f"LLM_{model_label}_{strat}"
+                data = load_llm_json(file_dir, file_stem)
+                if data is None:
+                    continue
+                strat_display = "0-shot" if strat == "zero_shot" else strat
+                names.append(f"{short_name}\n({strat_display})")
+                rates.append(data["solve_rate"] * 100)
+                ses.append(data.get("se_solve_rate", 0.0) * 100)
+                colors.append(model_colors[j % len(model_colors)])
 
         ax = axs[col]
         _bar_group(ax, names, rates, ses, colors, diff_title,
@@ -430,7 +471,7 @@ def fig_solve_rate(root_dir: str, timestamp: str, muzero_runs: int):
         ax.set_ylim(0, 115)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"SolveRate_Comparison_{timestamp}.png")
+    out = os.path.join(root_dir, f"SolveRate_Comparison_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -445,33 +486,38 @@ def fig_illegal_rate(root_dir: str, timestamp: str):
     mpl.rc("font", size=font_s)
 
     muzero_conds = [
-        ("MuZero", PLOT_COLORS[0]),
-        ("Value ablated\n(PFC lesion)", PLOT_COLORS[2]),
-        ("Policy ablated\n(Cerebellar)", PLOT_COLORS[1]),
+        ("MuZero", "MuZero", PLOT_COLORS[0]),
+        ("Value ablated\n(PFC lesion)", "Value abl.\n(PFC)", PLOT_COLORS[2]),
+        ("Policy ablated\n(Cerebellar)", "Policy abl.\n(Cereb.)", PLOT_COLORS[1]),
     ]
+    llm_short_names = {"qwen25_7b": "Qwen", "llama3_8b": "Llama"}
 
-    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(7.5, 3.5), sharey=True)
+    fig, axs = plt.subplots(1, len(DIFFICULTIES), figsize=(12, 3.5), sharey=True)
 
     for col, (diff_dir, diff_title) in enumerate(DIFFICULTIES):
         file_dir = os.path.join(root_dir, diff_dir)
         names, rates, ses, colors = [], [], [], []
 
-        for cond_name, cond_color in muzero_conds:
-            rate, se = MUZERO_ILLEGAL_RATES_AGGREGATE[cond_name]
-            names.append(cond_name)
+        for cond_key, cond_display, cond_color in muzero_conds:
+            rate, se = MUZERO_ILLEGAL_RATES_AGGREGATE[cond_key]
+            names.append(cond_display)
             rates.append(rate)
             ses.append(se)
             colors.append(cond_color)
 
-        for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
-            file_stem = f"LLM_{LLM_MODEL_LABEL}_{strat}"
-            data = load_llm_json(file_dir, file_stem)
-            if data is None:
-                continue
-            names.append(LLM_DISPLAY_NAMES[j])
-            rates.append(data["mean_illegal_rate"] * 100)
-            ses.append(data["se_illegal_rate"] * 100)
-            colors.append(EXTRA_COLORS[j % len(EXTRA_COLORS)])
+        for model_label, model_display in LLM_MODELS:
+            model_colors = LLM_MODEL_COLORS[model_label]
+            short_name = llm_short_names.get(model_label, model_display)
+            for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
+                file_stem = f"LLM_{model_label}_{strat}"
+                data = load_llm_json(file_dir, file_stem)
+                if data is None:
+                    continue
+                strat_display = "0-shot" if strat == "zero_shot" else strat
+                names.append(f"{short_name}\n({strat_display})")
+                rates.append(data["mean_illegal_rate"] * 100)
+                ses.append(data["se_illegal_rate"] * 100)
+                colors.append(model_colors[j % len(model_colors)])
 
         ax = axs[col]
         _bar_group(ax, names, rates, ses, colors, diff_title,
@@ -484,7 +530,7 @@ def fig_illegal_rate(root_dir: str, timestamp: str):
     fig.text(0.5, -0.02, "(MuZero: aggregate over random starts, n\\_sims=25)",
              ha="center", fontsize=6, style="italic")
     fig.tight_layout()
-    out = os.path.join(root_dir, f"IllegalRate_Comparison_{timestamp}.png")
+    out = os.path.join(root_dir, f"IllegalRate_Comparison_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -524,7 +570,7 @@ def fig_feedback_sweep(root_dir: str, timestamp: str):
             ax.set_ylim(bottom=0, top=max_bar * 1.25)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"LLM_FeedbackSweep_{timestamp}.png")
+    out = os.path.join(root_dir, f"LLM_FeedbackSweep_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -607,7 +653,7 @@ def fig_layer_ablation(root_dir: str, timestamp: str):
             ax.legend(fontsize=font_s - 1, frameon=False)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"LLM_LayerSweep_AllDifficulties_{timestamp}.png")
+    out = os.path.join(root_dir, f"LLM_LayerSweep_AllDifficulties_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -662,7 +708,7 @@ def fig_layer_ablation(root_dir: str, timestamp: str):
         ax_s.spines["right"].set_visible(False)
         ax_s.legend(fontsize=font_s, frameon=False)
         fig_s.tight_layout()
-        out_s = os.path.join(diff_root, f"LLM_LayerSweep_{timestamp}.png")
+        out_s = os.path.join(diff_root, f"LLM_LayerSweep_{timestamp}.pdf")
         fig_s.savefig(out_s, dpi=300, bbox_inches="tight")
         plt.close(fig_s)
         print(f"  Saved: {out_s}")
@@ -759,7 +805,7 @@ def fig_llm_ablation_matrix(root_dir: str, timestamp: str):
             if row == 2:
                 ax.set_xlabel("Transformer layer index", fontsize=font_s)
 
-    out = os.path.join(root_dir, f"LLM_AblationMatrix_{timestamp}.png")
+    out = os.path.join(root_dir, f"LLM_AblationMatrix_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -859,7 +905,7 @@ def fig_muzero_heatmap(root_dir: str, timestamp: str, muzero_runs: int):
     cbar.set_label("Mean error (steps above optimal)", fontsize=7)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"MuZero_AblationMatrix_{timestamp}.png")
+    out = os.path.join(root_dir, f"MuZero_AblationMatrix_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -925,7 +971,187 @@ def fig_llm_heatmap(root_dir: str, timestamp: str):
     cbar.set_label("Mean error (steps above optimal)", fontsize=7)
 
     fig.tight_layout()
-    out = os.path.join(root_dir, f"LLM_ConditionMatrix_{timestamp}.png")
+    out = os.path.join(root_dir, f"LLM_ConditionMatrix_{timestamp}.pdf")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 12: Two-model comparison heatmap (Qwen vs Llama)
+# ══════════════════════════════════════════════════════════════════════════════
+
+CROSS_MODEL_CONDITIONS = [
+    ("zero_shot", "Zero-shot"),
+    ("cot", "CoT"),
+    ("cot_h5_illfb", "CoT + horizon + illegal fb"),
+    ("cot_ablateL0", "CoT + ablate layer 0"),
+    ("cot_ablateL14", "CoT + ablate layer 14"),
+]
+
+
+def fig_cross_model_heatmap(root_dir: str, timestamp: str):
+    """Side-by-side heatmaps comparing Qwen and Llama on shared conditions."""
+    font_s = 7
+    mpl.rc("font", size=font_s)
+
+    col_labels = [name for _, name in HEATMAP_DIFFICULTIES]
+    row_labels = [name for _, name in CROSS_MODEL_CONDITIONS]
+
+    n_rows = len(CROSS_MODEL_CONDITIONS)
+    n_cols = len(HEATMAP_DIFFICULTIES)
+
+    fig, (ax_q, ax_l) = plt.subplots(1, 2, figsize=(9, 3.5),
+                                      gridspec_kw={"wspace": 0.20})
+
+    for ax, (model_label, model_display) in zip([ax_q, ax_l], LLM_MODELS):
+        data = np.full((n_rows, n_cols), np.nan)
+        se_data = np.full((n_rows, n_cols), np.nan)
+
+        for j, (diff_dir, _) in enumerate(HEATMAP_DIFFICULTIES):
+            file_dir = os.path.join(root_dir, diff_dir)
+            for i, (stem, _) in enumerate(CROSS_MODEL_CONDITIONS):
+                res = load_llm_json(file_dir, f"LLM_{model_label}_{stem}")
+                if res is not None:
+                    data[i, j] = res["mean_error"]
+                    se_data[i, j] = res["se_error"]
+
+        _draw_heatmap(ax, data, se_data, row_labels, col_labels,
+                      title=model_display,
+                      cbar_label="Mean error",
+                      vmin=0, vmax=200)
+        if ax == ax_l:
+            ax.set_yticklabels([])
+            ax.set_ylabel("")
+        else:
+            ax.set_ylabel("Condition", fontsize=8)
+
+    # Shared colorbar
+    from matplotlib.colors import TwoSlopeNorm
+    norm = TwoSlopeNorm(vmin=0, vcenter=60, vmax=200)
+    sm = plt.cm.ScalarMappable(cmap="RdBu_r", norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=[ax_q, ax_l], shrink=0.8, pad=0.02)
+    cbar.set_label("Mean error (steps above optimal)", fontsize=7)
+
+    fig.tight_layout()
+    out = os.path.join(root_dir, f"LLM_CrossModel_Comparison_{timestamp}.pdf")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 13: Parse failures vs error scatter
+# ══════════════════════════════════════════════════════════════════════════════
+
+PARSE_MODELS = {
+    "qwen25_7b": {"display": "Qwen-2.5 7B", "marker": "o"},
+    "llama3_8b": {"display": "Llama-3 8B", "marker": "D"},
+}
+PARSE_DIFF_COLORS = {"LS": "#4C72B0", "MS": "#DD8452", "ES": "#55A868"}
+PARSE_CONDITION_LABELS = {
+    "cot_ablateL0": "ablate L0",
+    "cot_ablateL0_h5_illfb": "ablate L0 +fb",
+    "cot_noiseS0.5_L0": "noise L0",
+    "cot_noiseS0.5_L0_h5_illfb": "noise L0 +fb",
+    "cot_ablateL14": "ablate L14",
+    "cot_noiseS0.5_L8": "noise L8",
+}
+
+
+def _parse_stem(stem):
+    rest = stem.replace("LLM_", "")
+    for model_key in PARSE_MODELS:
+        if rest.startswith(model_key + "_"):
+            return model_key, rest[len(model_key) + 1:]
+    return None, rest
+
+
+def fig_parse_failures(root_dir: str, timestamp: str):
+    """Scatter: mean parse failures per episode vs mean error, all LLM conditions."""
+    rows = []
+    for diff_dir, diff_name in DIFFICULTIES:
+        for path in sorted(glob.glob(os.path.join(root_dir, diff_dir, "LLM_*_results.json"))):
+            with open(path) as f:
+                data = json.load(f)
+            episodes = data.get("episodes", [])
+            if not episodes:
+                continue
+            mean_pf = np.mean([ep["parse_failures"] for ep in episodes])
+            stem = os.path.basename(path).replace("_results.json", "")
+            model_key, condition = _parse_stem(stem)
+            rows.append({
+                "model": model_key, "condition": condition,
+                "difficulty": diff_dir, "diff_name": diff_name,
+                "mean_error": data["mean_error"],
+                "mean_parse_failures": mean_pf,
+            })
+
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+
+    for diff_dir, diff_name in DIFFICULTIES:
+        for model_key, minfo in PARSE_MODELS.items():
+            subset = [r for r in rows
+                      if r["difficulty"] == diff_dir and r["model"] == model_key]
+            if not subset:
+                continue
+            ax.scatter(
+                [r["mean_parse_failures"] for r in subset],
+                [r["mean_error"] for r in subset],
+                marker=minfo["marker"],
+                color=PARSE_DIFF_COLORS[diff_dir],
+                s=35, alpha=0.75,
+                edgecolors="black", linewidths=0.4,
+            )
+
+    # Annotate outliers (parse_failures > 1)
+    outliers = sorted(
+        [r for r in rows if r["mean_parse_failures"] > 1],
+        key=lambda r: (r["mean_parse_failures"], r["mean_error"]),
+    )
+    used_positions = []
+    for r in outliers:
+        model_short = PARSE_MODELS[r["model"]]["display"].split()[0]
+        cond_label = PARSE_CONDITION_LABELS.get(r["condition"], r["condition"])
+        label = f"{model_short}, {cond_label} ({r['diff_name']})"
+        base_x, base_y = 14, 0
+        for dy_idx in range(len(used_positions) + 1):
+            dy = -12 * dy_idx
+            candidate = (r["mean_parse_failures"] + base_x,
+                         r["mean_error"] + base_y + dy)
+            if not any(abs(candidate[0] - px) < 20 and abs(candidate[1] - py) < 10
+                       for px, py in used_positions):
+                break
+        used_positions.append(candidate)
+        ax.annotate(
+            label, (r["mean_parse_failures"], r["mean_error"]),
+            fontsize=5.5, alpha=0.85,
+            xytext=(base_x, base_y + dy), textcoords="offset points",
+            arrowprops=dict(arrowstyle="-", color="grey", lw=0.4),
+        )
+
+    # Two-part legend: colour = difficulty, marker = model
+    from matplotlib.lines import Line2D
+    handles = []
+    for diff_dir, diff_name in DIFFICULTIES:
+        handles.append(Line2D(
+            [0], [0], marker="o", color="w", markerfacecolor=PARSE_DIFF_COLORS[diff_dir],
+            markeredgecolor="black", markersize=7, linewidth=0, label=diff_name,
+        ))
+    handles.append(Line2D([0], [0], linestyle="", label=""))
+    for model_key, minfo in PARSE_MODELS.items():
+        handles.append(Line2D(
+            [0], [0], marker=minfo["marker"], color="w", markerfacecolor="grey",
+            markeredgecolor="black", markersize=7, linewidth=0, label=minfo["display"],
+        ))
+    ax.set_xlabel("Mean parse failures per episode")
+    ax.set_ylabel("Mean error (excess moves)")
+    ax.set_title("Parse failures vs. error — all LLM conditions")
+    ax.legend(handles=handles, fontsize=7, frameon=False, loc="center right")
+
+    fig.tight_layout()
+    out = os.path.join(root_dir, f"ParseFailures_vs_Error_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -1078,38 +1304,44 @@ def main():
     print(f"Generating all figures for timestamp {args.timestamp}")
     print(f"Output directory: {root_dir}\n")
 
-    print("[1/11] MuZero ablation grid")
+    print("[1/13] MuZero ablation grid")
     fig_muzero_ablation_grid(root_dir, args.timestamp)
 
-    print("[2/11] MuZero bar charts (simulations to baseline)")
+    print("[2/13] MuZero bar charts (simulations to baseline)")
     fig_muzero_bar_charts(root_dir, args.timestamp)
 
-    print("[3/11] MuZero average performance")
+    print("[3/13] MuZero average performance")
     fig_muzero_average_performance(root_dir, args.timestamp)
 
-    print("[4/11] LLM vs MuZero — error comparison")
+    print("[4/13] LLM vs MuZero — error comparison")
     fig_llm_muzero_error(root_dir, args.timestamp, args.muzero_runs)
 
-    print("[5/11] Solve rate comparison")
+    print("[5/13] Solve rate comparison")
     fig_solve_rate(root_dir, args.timestamp, args.muzero_runs)
 
-    print("[6/11] Illegal move rate comparison")
+    print("[6/13] Illegal move rate comparison")
     fig_illegal_rate(root_dir, args.timestamp)
 
-    print("[7/11] LLM feedback sweep")
+    print("[7/13] LLM feedback sweep")
     fig_feedback_sweep(root_dir, args.timestamp)
 
-    print("[8/11] LLM layer ablation")
+    print("[8/13] LLM layer ablation")
     fig_layer_ablation(root_dir, args.timestamp)
 
-    print("[9/11] LLM ablation matrix")
+    print("[9/13] LLM ablation matrix")
     fig_llm_ablation_matrix(root_dir, args.timestamp)
 
-    print("[10/11] MuZero heatmap")
+    print("[10/13] MuZero heatmap")
     fig_muzero_heatmap(root_dir, args.timestamp, args.muzero_runs)
 
-    print("[11/11] LLM heatmap")
+    print("[11/13] LLM heatmap")
     fig_llm_heatmap(root_dir, args.timestamp)
+
+    print("[12/13] Cross-model comparison heatmap")
+    fig_cross_model_heatmap(root_dir, args.timestamp)
+
+    print("[13/13] Parse failures vs error")
+    fig_parse_failures(root_dir, args.timestamp)
 
     print("\n[Tables] Generating CSV summaries")
     generate_tables(root_dir, args.muzero_runs)
