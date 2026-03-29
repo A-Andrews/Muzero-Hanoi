@@ -537,6 +537,132 @@ def fig_illegal_rate(root_dir: str, timestamp: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 6b: Illegal move rate — condensed stacked bar (one bar per condition)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def fig_illegal_rate_stacked(root_dir: str, timestamp: str):
+    """Single-panel grouped bar chart: one group per condition, three bars per group
+    (one per difficulty). Hatching distinguishes difficulty levels so the figure
+    is readable in greyscale.
+    """
+    def _darken(color, factor=0.75):
+        r, g, b, *a = mpl.colors.to_rgba(color)
+        return (r * factor, g * factor, b * factor, 1.0)
+
+    font_s = 7
+    mpl.rc("font", size=font_s)
+
+    diff_hatches = {"LS": "", "MS": "///", "ES": "xxx"}
+    diff_labels  = {"LS": "Close (1 move)", "MS": "Moderate (3 moves)", "ES": "Far (7 moves)"}
+
+    muzero_conds = [
+        ("MuZero",                      "MuZero",             "#666666"),
+        ("Value ablated\n(PFC lesion)",  "Value abl.\n(PFC)",  PLOT_COLORS[2]),
+        ("Policy ablated\n(Cerebellar)", "Policy abl.\n(Cereb.)", PLOT_COLORS[1]),
+    ]
+    llm_short       = {"qwen25_7b": "Qwen", "llama3_8b": "Llama"}
+    llm_strat_short = {"zero_shot": "0-shot", "cot": "CoT"}
+
+    # Load per-difficulty MuZero rates
+    per_diff_muzero = {}
+    for diff_dir, _ in DIFFICULTIES:
+        path = os.path.join(root_dir, diff_dir, "muzero_illegal_rates.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                per_diff_muzero[diff_dir] = json.load(f)
+
+    # Build list of conditions: (display_name, color, {diff_dir: (rate, se)})
+    conditions = []
+
+    for cond_key, cond_display, cond_color in muzero_conds:
+        diff_vals = {}
+        for diff_dir, _ in DIFFICULTIES:
+            if diff_dir in per_diff_muzero:
+                d = per_diff_muzero[diff_dir]
+                diff_vals[diff_dir] = (d[cond_key]["mean"] * 100, d[cond_key]["se"] * 100)
+            else:
+                rate, se = MUZERO_ILLEGAL_RATES_AGGREGATE[cond_key]
+                diff_vals[diff_dir] = (rate, se)
+        conditions.append((cond_display, cond_color, diff_vals))
+
+    for model_label, _ in LLM_MODELS:
+        model_colors = LLM_MODEL_COLORS[model_label]
+        short = llm_short.get(model_label, model_label)
+        for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
+            strat_s = llm_strat_short.get(strat, strat)
+            diff_vals = {}
+            all_present = True
+            for diff_dir, _ in DIFFICULTIES:
+                data = load_llm_json(os.path.join(root_dir, diff_dir), f"LLM_{model_label}_{strat}")
+                if data is None:
+                    all_present = False
+                    break
+                diff_vals[diff_dir] = (data["mean_illegal_rate"] * 100, data["se_illegal_rate"] * 100)
+            if all_present:
+                conditions.append((f"{short}\n({strat_s})", model_colors[j % len(model_colors)], diff_vals))
+
+    n_conds = len(conditions)
+    n_diff  = len(DIFFICULTIES)
+    bar_w    = 0.22
+    group_sp = 0.75  # spacing between group centres (1.0 = no overlap)
+    offsets  = np.linspace(-(n_diff - 1) / 2, (n_diff - 1) / 2, n_diff) * bar_w
+    x        = np.arange(n_conds) * group_sp
+
+    fig, ax = plt.subplots(figsize=(max(4.0, n_conds * group_sp * 0.9), 3.5))
+
+    legend_patches = []
+    for di, (diff_dir, _) in enumerate(DIFFICULTIES):
+        rates  = np.array([cond[2][diff_dir][0] for cond in conditions])
+        ses    = np.array([cond[2][diff_dir][1] for cond in conditions])
+        colors = [cond[1] for cond in conditions]
+        hatch  = diff_hatches[diff_dir]
+
+        dark_colors = [_darken(c) for c in colors]
+        ax.bar(
+            x + offsets[di], rates, bar_w,
+            yerr=ses, capsize=2,
+            color=colors,
+            hatch=hatch,
+            edgecolor=dark_colors,
+            linewidth=0.5,
+            error_kw=dict(zorder=3, linewidth=0.8),
+        )
+
+        # Dot marker at y=0 for zero-rate bars so they're not invisible
+        zero_mask = rates == 0
+        if zero_mask.any():
+            ax.scatter(
+                (x + offsets[di])[zero_mask], np.full(zero_mask.sum(), 1.5),
+                marker="o", s=12,
+                color=[colors[i] for i in np.where(zero_mask)[0]],
+                edgecolors=[dark_colors[i] for i in np.where(zero_mask)[0]],
+                linewidths=0.5,
+                zorder=4,
+            )
+
+        patch = mpl.patches.Patch(facecolor="grey", hatch=hatch,
+                                   edgecolor=_darken("grey"), label=diff_labels[diff_dir])
+        legend_patches.append(patch)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([cond[0] for cond in conditions],
+                       rotation=35, ha="right", fontsize=font_s)
+    ax.set_ylabel("Illegal move rate (%)")
+    ax.set_ylim(0, 100)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    ax.legend(handles=legend_patches, title="Difficulty", fontsize=font_s - 1,
+              title_fontsize=font_s - 1, loc="upper left", frameon=False)
+
+    fig.tight_layout()
+    out = os.path.join(root_dir, f"IllegalRate_Stacked_{timestamp}.pdf")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FIGURE 7: LLM feedback sweep (CoT → +horizon → +illegal feedback)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1001,8 +1127,8 @@ def fig_cross_model_heatmap(root_dir: str, timestamp: str):
     n_rows = len(CROSS_MODEL_CONDITIONS)
     n_cols = len(HEATMAP_DIFFICULTIES)
 
-    fig, (ax_q, ax_l) = plt.subplots(1, 2, figsize=(9, 3.5),
-                                      gridspec_kw={"wspace": 0.20})
+    fig, (ax_q, ax_l) = plt.subplots(2, 1, figsize=(4.5, 5.5),
+                                      gridspec_kw={"hspace": 0.35})
 
     for ax, (model_label, model_display) in zip([ax_q, ax_l], LLM_MODELS):
         data = np.full((n_rows, n_cols), np.nan)
@@ -1020,11 +1146,7 @@ def fig_cross_model_heatmap(root_dir: str, timestamp: str):
                       title=model_display,
                       cbar_label="Mean error",
                       vmin=0, vmax=200)
-        if ax == ax_l:
-            ax.set_yticklabels([])
-            ax.set_ylabel("")
-        else:
-            ax.set_ylabel("Condition", fontsize=8)
+        ax.set_ylabel("Condition", fontsize=8)
 
     # Shared colorbar
     from matplotlib.colors import TwoSlopeNorm
@@ -1036,6 +1158,71 @@ def fig_cross_model_heatmap(root_dir: str, timestamp: str):
 
     fig.tight_layout()
     out = os.path.join(root_dir, f"LLM_CrossModel_Comparison_{timestamp}.pdf")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
+CROSS_MODEL_CONDITIONS_COMBINED = [
+    ("zero_shot", "Zero-shot"),
+    ("cot", "CoT"),
+    ("cot_h5_illfb", "CoT + horizon + illegal fb"),
+]
+
+
+def fig_cross_model_heatmap_combined(root_dir: str, timestamp: str,
+                                     out_dir: str = None):
+    """Single combined heatmap with model name in the row labels."""
+    if out_dir is None:
+        out_dir = root_dir
+
+    font_s = 7
+    mpl.rc("font", size=font_s)
+
+    col_labels = [name for _, name in HEATMAP_DIFFICULTIES]
+
+    n_conds = len(CROSS_MODEL_CONDITIONS_COMBINED)
+    n_cols = len(HEATMAP_DIFFICULTIES)
+    n_models = len(LLM_MODELS)
+    n_rows = n_models * n_conds
+
+    data = np.full((n_rows, n_cols), np.nan)
+    se_data = np.full((n_rows, n_cols), np.nan)
+    row_labels = []
+
+    for m, (model_label, model_display) in enumerate(LLM_MODELS):
+        for i, (stem, cond_name) in enumerate(CROSS_MODEL_CONDITIONS_COMBINED):
+            row_idx = m * n_conds + i
+            row_labels.append(f"{model_display} — {cond_name}")
+            for j, (diff_dir, _) in enumerate(HEATMAP_DIFFICULTIES):
+                file_dir = os.path.join(root_dir, diff_dir)
+                res = load_llm_json(file_dir, f"LLM_{model_label}_{stem}")
+                if res is not None:
+                    data[row_idx, j] = res["mean_error"]
+                    se_data[row_idx, j] = res["se_error"]
+
+    row_height = 0.38
+    fig, ax = plt.subplots(figsize=(5.5, row_height * n_rows + 1.5))
+
+    _draw_heatmap(ax, data, se_data, row_labels, col_labels,
+                  title="Cross-Model Comparison",
+                  cbar_label="Mean error (steps above optimal)",
+                  vmin=0, vmax=200)
+
+    # Draw a horizontal separator between models
+    ax.axhline(y=n_conds - 0.5, color="white", linewidth=2.5)
+
+    ax.set_ylabel("", fontsize=8)
+
+    from matplotlib.colors import TwoSlopeNorm
+    norm = TwoSlopeNorm(vmin=0, vcenter=60, vmax=200)
+    sm = plt.cm.ScalarMappable(cmap="RdBu_r", norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, shrink=0.8, pad=0.02)
+    cbar.set_label("Mean error (steps above optimal)", fontsize=7)
+
+    fig.tight_layout()
+    out = os.path.join(out_dir, f"LLM_CrossModel_Combined_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -1321,6 +1508,9 @@ def main():
 
     print("[6/13] Illegal move rate comparison")
     fig_illegal_rate(root_dir, args.timestamp)
+
+    print("[6b/13] Illegal move rate — condensed stacked")
+    fig_illegal_rate_stacked(root_dir, args.timestamp)
 
     print("[7/13] LLM feedback sweep")
     fig_feedback_sweep(root_dir, args.timestamp)
