@@ -182,13 +182,14 @@ def _bar_group(ax, names, means, errors, colors, title, ylabel=None,
 # FIGURE 1: MuZero ablation grid (error vs simulations)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def fig_muzero_ablation_grid(root_dir: str, timestamp: str):
+def fig_muzero_ablation_grid(root_dir: str, timestamp: str, muzero_runs: int = 5):
     """3×5 grid: rows=difficulties, cols=ablation conditions."""
     labels = [l for l, _ in MUZERO_CONDITIONS]
     names = [n for _, n in MUZERO_CONDITIONS]
 
     font_s = 7
     mpl.rc("font", size=font_s)
+    se_factor = 1.0 / np.sqrt(muzero_runs)
 
     fig, axs = plt.subplots(
         nrows=len(DIFFICULTIES_GRID), ncols=len(labels),
@@ -203,7 +204,7 @@ def fig_muzero_ablation_grid(root_dir: str, timestamp: str):
             arr = load_accuracy(file_dir, label)
             if arr is None:
                 continue
-            errs = arr[:, 2] if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
+            errs = arr[:, 2] * se_factor if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
             axs[e, i].errorbar(
                 arr[:, 0], arr[:, 1], yerr=errs,
                 fmt="-o", color=PLOT_COLORS[i % len(PLOT_COLORS)],
@@ -231,7 +232,7 @@ def fig_muzero_ablation_grid(root_dir: str, timestamp: str):
 # FIGURE 2: MuZero bar charts (simulations to baseline)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def fig_muzero_bar_charts(root_dir: str, timestamp: str):
+def fig_muzero_bar_charts(root_dir: str, timestamp: str, muzero_runs: int = 5):
     labels = [l for l, _ in MUZERO_CONDITIONS_SHORT]
     names = [n.replace("\n", " ") for _, n in MUZERO_CONDITIONS_SHORT]
     state_titles = ["Close to goal", "Mid distance", "Far from goal"]
@@ -239,6 +240,7 @@ def fig_muzero_bar_charts(root_dir: str, timestamp: str):
 
     font_s = 7
     mpl.rc("font", size=font_s)
+    se_factor = 1.0 / np.sqrt(muzero_runs)
 
     fig_bar, axs_bar = plt.subplots(1, len(directories_bar), figsize=(7.5, 3), sharey=True)
 
@@ -259,11 +261,11 @@ def fig_muzero_bar_charts(root_dir: str, timestamp: str):
             indices = np.where(r[:, 1] <= mu_zero_avg)[0]
             if len(indices) > 0:
                 times_to_reach.append(r[indices[0], 0])
-                time_errs.append(r[indices[0], 2] if r.shape[1] > 2 else 0)
+                time_errs.append(r[indices[0], 2] * se_factor if r.shape[1] > 2 else 0)
                 never_reached_mask.append(False)
             else:
                 times_to_reach.append(r[-1, 0])
-                time_errs.append(r[-1, 2] if r.shape[1] > 2 else 0)
+                time_errs.append(r[-1, 2] * se_factor if r.shape[1] > 2 else 0)
                 never_reached_mask.append(True)
 
         bars = axs_bar[e].bar(
@@ -302,7 +304,7 @@ def fig_muzero_bar_charts(root_dir: str, timestamp: str):
 # FIGURE 3: MuZero average performance
 # ══════════════════════════════════════════════════════════════════════════════
 
-def fig_muzero_average_performance(root_dir: str, timestamp: str):
+def fig_muzero_average_performance(root_dir: str, timestamp: str, muzero_runs: int = 5):
     labels = [l for l, _ in MUZERO_CONDITIONS_SHORT]
     names = [n.replace("\n", " ") for _, n in MUZERO_CONDITIONS_SHORT]
     state_titles = ["Close to goal", "Mid distance", "Far from goal"]
@@ -310,6 +312,7 @@ def fig_muzero_average_performance(root_dir: str, timestamp: str):
 
     font_s = 7
     mpl.rc("font", size=font_s)
+    se_factor = 1.0 / np.sqrt(muzero_runs)
 
     fig_avg, axs_avg = plt.subplots(1, len(directories_bar), figsize=(7.5, 3), sharey=True)
 
@@ -323,7 +326,8 @@ def fig_muzero_average_performance(root_dir: str, timestamp: str):
                 errs.append(0)
                 continue
             means.append(arr[:, 1].mean())
-            errs.append(arr[:, 2].mean() if arr.shape[1] > 2 else 0)
+            se_vals = arr[:, 2] * se_factor if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
+            errs.append(float(np.sqrt(np.mean(se_vals ** 2))))
 
         bars = axs_avg[e].bar(
             names, means, yerr=errs, capsize=5,
@@ -1260,8 +1264,11 @@ def fig_parse_failures(root_dir: str, timestamp: str):
     rows = []
     for diff_dir, diff_name in DIFFICULTIES:
         for path in sorted(glob.glob(os.path.join(root_dir, diff_dir, "LLM_*_results.json"))):
-            with open(path) as f:
-                data = json.load(f)
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                continue  # skip empty / malformed files
             episodes = data.get("episodes", [])
             if not episodes:
                 continue
@@ -1392,8 +1399,11 @@ def generate_tables(root_dir: str, muzero_runs: int):
         for json_path in sorted(glob.glob(os.path.join(file_dir, "LLM_*_results.json"))):
             fname = os.path.basename(json_path)
             condition = fname.replace("LLM_", "").replace("_results.json", "")
-            with open(json_path) as f:
-                data = json.load(f)
+            try:
+                with open(json_path) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                continue  # skip empty / malformed files
             rows.append({
                 "condition": condition, "difficulty": diff_name,
                 "difficulty_code": diff_dir,
@@ -1439,8 +1449,11 @@ def generate_tables(root_dir: str, muzero_runs: int):
         for json_path in sorted(glob.glob(os.path.join(file_dir, "LLM_*_results.json"))):
             fname = os.path.basename(json_path)
             condition = fname.replace("LLM_", "").replace("_results.json", "")
-            with open(json_path) as f:
-                data = json.load(f)
+            try:
+                with open(json_path) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                continue  # skip empty / malformed files
             rows.append({
                 "agent_type": "LLM", "condition": condition,
                 "difficulty": diff_name, "difficulty_code": diff_dir,
@@ -1492,13 +1505,13 @@ def main():
     print(f"Output directory: {root_dir}\n")
 
     print("[1/13] MuZero ablation grid")
-    fig_muzero_ablation_grid(root_dir, args.timestamp)
+    fig_muzero_ablation_grid(root_dir, args.timestamp, args.muzero_runs)
 
     print("[2/13] MuZero bar charts (simulations to baseline)")
-    fig_muzero_bar_charts(root_dir, args.timestamp)
+    fig_muzero_bar_charts(root_dir, args.timestamp, args.muzero_runs)
 
     print("[3/13] MuZero average performance")
-    fig_muzero_average_performance(root_dir, args.timestamp)
+    fig_muzero_average_performance(root_dir, args.timestamp, args.muzero_runs)
 
     print("[4/13] LLM vs MuZero — error comparison")
     fig_llm_muzero_error(root_dir, args.timestamp, args.muzero_runs)

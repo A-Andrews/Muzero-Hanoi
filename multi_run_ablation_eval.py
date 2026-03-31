@@ -63,7 +63,7 @@ def run_multi(args):
 
     arr = np.array(all_runs, dtype=float)  # (runs, len(sim_range))
     mean = arr.mean(axis=0)
-    std = arr.std(axis=0)
+    std = arr.std(axis=0, ddof=1)
     out = np.column_stack([args.n_mcts_simulations_range, mean, std])
 
     save_dir = os.path.join("stats", "Hanoi", args.timestamp, str(file_indx))

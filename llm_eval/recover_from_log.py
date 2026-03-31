@@ -100,12 +100,12 @@ os.makedirs(save_dir, exist_ok=True)
 file_stem = f"LLM_{args.model_label}_{args.prompting}"
 
 mean_e = agg["mean_error"]
-se_e   = agg["se_error"]
+std_e  = agg["std_error"]  # use std (not SE) — consistent with llm_hanoi_eval.py save_results()
 
 acc_tensor = torch.tensor([[0.0, mean_e]])
 torch.save(acc_tensor, os.path.join(save_dir, file_stem + "_actingAccuracy.pt"))
 
-err_tensor = torch.tensor([[0.0, mean_e, se_e]])
+err_tensor = torch.tensor([[0.0, mean_e, std_e]])
 torch.save(err_tensor, os.path.join(save_dir, file_stem + "_actingAccuracy_error.pt"))
 
 json_path = os.path.join(save_dir, file_stem + "_results.json")

@@ -15,6 +15,9 @@ parser = argparse.ArgumentParser(description="Plotting Results")
 parser.add_argument(
     "--timestamp", type=str, default=None, help="Timestamp for the results directory"
 )
+parser.add_argument(
+    "--muzero_runs", type=int, default=5, help="Number of runs used in multi_run_ablation_eval"
+)
 
 args = parser.parse_args()
 timestamp = args.timestamp
@@ -52,6 +55,8 @@ name_5 = "Value + Reward Ablated"
 names = [name_1, name_2, name_3, name_4, name_5]
 
 set_plot_style()
+
+se_factor = 1.0 / np.sqrt(args.muzero_runs)
 
 
 def load_accuracy(directory: str, label: str) -> np.ndarray:
@@ -117,7 +122,7 @@ for d in directories:
 
     i = 0
     for r in results:
-        errs = r[:, 2] if r.shape[1] > 2 else np.zeros_like(r[:, 1])
+        errs = r[:, 2] * se_factor if r.shape[1] > 2 else np.zeros_like(r[:, 1])
         axs[e, i].errorbar(
             r[:, 0],
             r[:, 1],
@@ -177,11 +182,11 @@ for e, d in enumerate(directories_bar):
         indices = np.where(r[:, 1] <= mu_zero_avg)[0]
         if len(indices) > 0:
             times_to_reach.append(r[indices[0], 0])
-            time_errs.append(r[indices[0], 2] if r.shape[1] > 2 else 0)
+            time_errs.append(r[indices[0], 2] * se_factor if r.shape[1] > 2 else 0)
             never_reached_mask.append(False)
         else:
             times_to_reach.append(r[-1, 0])
-            time_errs.append(r[-1, 2] if r.shape[1] > 2 else 0)
+            time_errs.append(r[-1, 2] * se_factor if r.shape[1] > 2 else 0)
             never_reached_mask.append(True)
 
     bars = axs_bar[e].bar(
@@ -241,7 +246,8 @@ for e, d in enumerate(directories_bar):
         # Load and get acting accuracy column
         arr = load_accuracy(file_dir, l)
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
-        err_results.append(arr[:, 2].mean() if arr.shape[1] > 2 else 0)
+        se_vals = arr[:, 2] * se_factor if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
+        err_results.append(float(np.sqrt(np.mean(se_vals ** 2))))
     # Plot as bar chart
     bars = axs_avg[e].bar(
         names,
