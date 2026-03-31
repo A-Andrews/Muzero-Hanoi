@@ -77,6 +77,19 @@ Let's brifly look at how the Tower of Hanoi problem is implemented. The first tw
 This brings us to the structure of the action space. In priciple, there are six possible moves from any state in the Tower of Hanoi problem (i.e., including illegal moves). This is because there are always 3 pegs and, in priciple, we can move a disk from any of the 3 pegs to any of 2 other pegs (i.e., $ 3 x 2 = 3!$ moves). Therefore, the action space can be represented by a simple 1d interger taking values from 0 to 5 (i.e., indexing one of the 6 possible moves). Next, we need to check whether the selected move is allowed from the currest state and if it is not, we should remain in the current state at the next time step (e.g., the move involved a peg with no disks or it led to a bigger disk being placed on top of a smaller one). Here making a choice about the reward functions is vital. Specifically, I decided to provide a negative reward whenever an illegal move is taken, so that the agent should learn which moves are allowed in any given state. The risk with this is that the agent just learns to avoid illegal moves, while never learning the task. Therefore, it is important to ensure the reward for completing the task successufully is much larger than the punishment for taking an illegal move across each step. I do not provide any positive rewards at intermediatery step. Finally, since a positive reward is only provided at successful termination, any RL agent using discounting less than 1, should be encouraged to solve the task with as fewer moves as possible.   
 
 
+## Known limitations
+
+### Error bar comparability between MuZero and LLM
+
+MuZero and LLM error bars in the comparison figures reflect different sources of variance and are **not directly comparable**:
+
+- **MuZero** error bars are standard errors computed *across 5 independent seeds* (each seed = mean error over 100 episodes). This captures initialisation / between-seed variability.
+- **LLM** error bars are standard errors computed *across episodes within a single seed* (e.g. 50 episodes). This captures episode-level variability within one run.
+
+As a result, LLM error bars tend to be smaller because within-seed episode variance is lower than between-seed variance, not because the LLM is more consistent. The direction and magnitude of the MuZero vs LLM performance difference is unaffected (the gap is large), but the error bars should not be compared directly.
+
+**Future work:** re-run LLM evaluation with multiple seeds (e.g. 5, matching MuZero) and compute between-seed SE to make the comparison methodologically equivalent.
+
 ## Run
 Simply run:
 

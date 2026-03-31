@@ -326,8 +326,7 @@ def fig_muzero_average_performance(root_dir: str, timestamp: str, muzero_runs: i
                 errs.append(0)
                 continue
             means.append(arr[:, 1].mean())
-            se_vals = arr[:, 2] * se_factor if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
-            errs.append(float(np.sqrt(np.mean(se_vals ** 2))))
+            errs.append(float(arr[-1, 2] * se_factor) if arr.shape[1] > 2 else 0.0)
 
         bars = axs_avg[e].bar(
             names, means, yerr=errs, capsize=5,

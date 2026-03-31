@@ -41,10 +41,10 @@ state_titles = ["Close to goal", "Mid distance", "Far from goal"]
 label_1 = "Muzero"
 label_2 = "ResetLatentPol"
 label_3 = "ResetLatentVal"
-lable_4 = "ResetLatentRwd"
+label_4 = "ResetLatentRwd"
 label_5 = "ResetLatentVal_ResetLatentRwd"
 
-labels = [label_1, label_2, label_3, lable_4, label_5]
+labels = [label_1, label_2, label_3, label_4, label_5]
 
 name_1 = "Muzero"
 name_2 = "Policy Ablated"
@@ -246,8 +246,7 @@ for e, d in enumerate(directories_bar):
         # Load and get acting accuracy column
         arr = load_accuracy(file_dir, l)
         results.append(arr[:, 1].mean())  # Take mean acting accuracy
-        se_vals = arr[:, 2] * se_factor if arr.shape[1] > 2 else np.zeros_like(arr[:, 1])
-        err_results.append(float(np.sqrt(np.mean(se_vals ** 2))))
+        err_results.append(float(arr[-1, 2] * se_factor) if arr.shape[1] > 2 else 0.0)
     # Plot as bar chart
     bars = axs_avg[e].bar(
         names,

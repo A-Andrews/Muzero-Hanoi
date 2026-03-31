@@ -402,6 +402,9 @@ def run_evaluation(
     when SLURM kills the job (sends SIGTERM before SIGKILL).
     """
     np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
     episode_results = []
     t0 = time.time()

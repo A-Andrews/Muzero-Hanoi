@@ -68,7 +68,7 @@ class TowersOfHanoi:
                 self.reset_check = False
                 self.step_counter = 0
         else:
-            ## if selected illegal move, don't terminate state but state in the same state and rwd=-1
+            ## if selected illegal move, don't terminate state but remain in the same state with rwd=-0.1
             rwd = -100 / 1000
             moved_state = self.c_state
             done = False
