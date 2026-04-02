@@ -136,11 +136,14 @@ def run_tests():
             print(f"    {lbl:>10s}: mean={g.mean():.2f}, median={np.median(g):.1f}, n={len(g)}")
         print(f"    H={H:.2f}, p={p:.2e} {sig_stars(p)}")
 
-        # Post-hoc pairwise
-        for (l1, g1), (l2, g2) in combinations(zip(labels, groups), 2):
-            tag = f"{cond} | {l1} vs {l2}"
-            record = print_mwu_result(tag, g1, g2, l1, l2)
-            all_pairwise.append(record)
+        # Post-hoc pairwise (only if omnibus K-W is significant)
+        if p < 0.05:
+            for (l1, g1), (l2, g2) in combinations(zip(labels, groups), 2):
+                tag = f"{cond} | {l1} vs {l2}"
+                record = print_mwu_result(tag, g1, g2, l1, l2)
+                all_pairwise.append(record)
+        else:
+            print(f"    Skipping post-hoc tests (K-W not significant)")
 
     # ── 2. CoT effect (zero-shot vs CoT) ────────────────────────────────
     print("\n" + "=" * 80)

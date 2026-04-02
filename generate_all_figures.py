@@ -544,9 +544,9 @@ def fig_illegal_rate(root_dir: str, timestamp: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fig_illegal_rate_stacked(root_dir: str, timestamp: str):
-    """Single-panel grouped bar chart: one group per condition, three bars per group
-    (one per difficulty). Hatching distinguishes difficulty levels so the figure
-    is readable in greyscale.
+    """Single-panel grouped bar chart: one group per difficulty, one bar per
+    condition within each group. Conditions are distinguished by colour; the
+    three difficulty groups form the x-axis.
     """
     def _darken(color, factor=0.75):
         r, g, b, *a = mpl.colors.to_rgba(color)
@@ -555,8 +555,7 @@ def fig_illegal_rate_stacked(root_dir: str, timestamp: str):
     font_s = 7
     mpl.rc("font", size=font_s)
 
-    diff_hatches = {"LS": "", "MS": "///", "ES": "xxx"}
-    diff_labels  = {"LS": "Close (1 move)", "MS": "Moderate (3 moves)", "ES": "Far (7 moves)"}
+    diff_labels  = {"LS": "Close\n(1 move)", "MS": "Moderate\n(3 moves)", "ES": "Far\n(7 moves)"}
 
     muzero_conds = [
         ("MuZero",                      "MuZero",             "#666666"),
@@ -606,60 +605,435 @@ def fig_illegal_rate_stacked(root_dir: str, timestamp: str):
 
     n_conds = len(conditions)
     n_diff  = len(DIFFICULTIES)
-    bar_w    = 0.22
-    group_sp = 0.75  # spacing between group centres (1.0 = no overlap)
-    offsets  = np.linspace(-(n_diff - 1) / 2, (n_diff - 1) / 2, n_diff) * bar_w
-    x        = np.arange(n_conds) * group_sp
+    bar_w    = 0.12
+    group_sp = 1.0  # spacing between difficulty group centres
+    offsets  = np.linspace(-(n_conds - 1) / 2, (n_conds - 1) / 2, n_conds) * bar_w
+    x        = np.arange(n_diff) * group_sp
 
-    fig, ax = plt.subplots(figsize=(max(4.0, n_conds * group_sp * 0.9), 3.5))
+    fig, ax = plt.subplots(figsize=(max(4.0, n_diff * group_sp * 1.8), 3.5))
 
     legend_patches = []
-    for di, (diff_dir, _) in enumerate(DIFFICULTIES):
-        rates  = np.array([cond[2][diff_dir][0] for cond in conditions])
-        ses    = np.array([cond[2][diff_dir][1] for cond in conditions])
-        colors = [cond[1] for cond in conditions]
-        hatch  = diff_hatches[diff_dir]
+    for ci, (cond_display, cond_color, diff_vals) in enumerate(conditions):
+        rates  = np.array([diff_vals[diff_dir][0] for diff_dir, _ in DIFFICULTIES])
+        ses    = np.array([diff_vals[diff_dir][1] for diff_dir, _ in DIFFICULTIES])
+        dark_c = _darken(cond_color)
 
-        dark_colors = [_darken(c) for c in colors]
         ax.bar(
-            x + offsets[di], rates, bar_w,
+            x + offsets[ci], rates, bar_w,
             yerr=ses, capsize=2,
-            color=colors,
-            hatch=hatch,
-            edgecolor=dark_colors,
+            color=cond_color,
+            edgecolor=dark_c,
             linewidth=0.5,
             error_kw=dict(zorder=3, linewidth=0.8),
         )
 
-        # Dot marker at y=0 for zero-rate bars so they're not invisible
+        # Dot marker at y=0 so zero-rate bars are still visible
         zero_mask = rates == 0
         if zero_mask.any():
             ax.scatter(
-                (x + offsets[di])[zero_mask], np.full(zero_mask.sum(), 1.5),
+                (x + offsets[ci])[zero_mask], np.full(zero_mask.sum(), 1.5),
                 marker="o", s=12,
-                color=[colors[i] for i in np.where(zero_mask)[0]],
-                edgecolors=[dark_colors[i] for i in np.where(zero_mask)[0]],
+                color=cond_color,
+                edgecolors=dark_c,
                 linewidths=0.5,
                 zorder=4,
             )
 
-        patch = mpl.patches.Patch(facecolor="grey", hatch=hatch,
-                                   edgecolor=_darken("grey"), label=diff_labels[diff_dir])
-        legend_patches.append(patch)
+        legend_patches.append(
+            mpl.patches.Patch(facecolor=cond_color, edgecolor=dark_c, label=cond_display)
+        )
 
     ax.set_xticks(x)
-    ax.set_xticklabels([cond[0] for cond in conditions],
-                       rotation=35, ha="right", fontsize=font_s)
+    ax.set_xticklabels([diff_labels[diff_dir] for diff_dir, _ in DIFFICULTIES],
+                       fontsize=font_s)
     ax.set_ylabel("Illegal move rate (%)")
     ax.set_ylim(0, 100)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
 
-    ax.legend(handles=legend_patches, title="Difficulty", fontsize=font_s - 1,
-              title_fontsize=font_s - 1, loc="upper left", frameon=False)
+    ax.legend(handles=legend_patches, title="Model", fontsize=font_s - 1,
+              title_fontsize=font_s - 1, loc="upper left", frameon=False,
+              ncol=1)
 
     fig.tight_layout()
     out = os.path.join(root_dir, f"IllegalRate_Stacked_{timestamp}.pdf")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 6c: Illegal rate + mean error — line charts (shared legend)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def fig_illegal_rate_and_error_lines(root_dir: str, timestamp: str,
+                                     muzero_runs: int = 10,
+                                     norm_by: str = "condition"):
+    """Two-panel figure: illegal move rate (top) and mean error (bottom) as line
+    charts across difficulty levels.  One line per condition; shared legend at
+    the bottom.
+
+    X-axis: difficulty (Close → Moderate → Far).
+    """
+    def _darken(color, factor=0.75):
+        r, g, b, *a = mpl.colors.to_rgba(color)
+        return (r * factor, g * factor, b * factor, 1.0)
+
+    font_s = 7
+    mpl.rc("font", size=font_s)
+
+    se_factor = 1.0 / np.sqrt(muzero_runs)
+
+    diff_order = [("LS", "Close\n(1 move)"), ("MS", "Moderate\n(3 moves)"), ("ES", "Far\n(7 moves)")]
+    # Worst-case error per difficulty for normalisation (0 = optimal, 1 = fail)
+    worst_case = {d: MAX_STEPS - OPTIMAL_MOVES[d] for d, _ in diff_order}
+
+    muzero_conds = [
+        ("MuZero",               "Muzero"),
+        ("Value abl. (PFC)",     "ResetLatentVal"),
+        ("Policy abl. (Cereb.)", "ResetLatentPol"),
+    ]
+    llm_short       = {"qwen25_7b": "Qwen", "llama3_8b": "Llama"}
+    llm_strat_short = {"zero_shot": "0-shot", "cot": "CoT"}
+
+    # One colour per model group; markers/linestyles distinguish conditions within group
+    GROUP_COLORS = {
+        "muzero":    "#2166AC",   # blue
+        "qwen25_7b": "#D6604D",   # red-orange
+        "llama3_8b": "#4DAC26",   # green
+        "human":     "#756BB1",   # purple
+    }
+    GROUP_MARKERS = {
+        "muzero":    ["o", "s", "^"],
+        "qwen25_7b": ["o", "s"],
+        "llama3_8b": ["o", "s"],
+        "human":     ["o", "s", "^"],
+    }
+    GROUP_LINESTYLES = {
+        "muzero":    ["-", "--", "-."],
+        "qwen25_7b": ["-", "--"],
+        "llama3_8b": ["-", "--"],
+        "human":     ["--", "--", "--"],
+    }
+    group_idx_counter = {}   # track within-group index
+
+    # Load per-difficulty MuZero illegal rates
+    per_diff_muzero = {}
+    for diff_dir, _ in diff_order:
+        path = os.path.join(root_dir, diff_dir, "muzero_illegal_rates.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                per_diff_muzero[diff_dir] = json.load(f)
+
+    # Build unified condition list: (display_name, color, group, illegal_vals, error_vals)
+    # group is used for model-level normalisation ("muzero", model_label).
+    # illegal_vals / error_vals: list of (mean, se) or None per difficulty.
+    conditions = []
+
+    MUZERO_KEY_MAP = {
+        "Muzero":         "MuZero",
+        "ResetLatentVal": "Value ablated\n(PFC lesion)",
+        "ResetLatentPol": "Policy ablated\n(Cerebellar)",
+    }
+
+    # MuZero conditions
+    for cond_display, file_label in muzero_conds:
+        ill_vals, err_vals = [], []
+        for diff_dir, _ in diff_order:
+            if diff_dir in per_diff_muzero:
+                d = per_diff_muzero[diff_dir]
+                key = MUZERO_KEY_MAP[file_label]
+                ill_vals.append((d[key]["mean"] * 100, d[key]["se"] * 100))
+            else:
+                rate, se = MUZERO_ILLEGAL_RATES_AGGREGATE[MUZERO_KEY_MAP[file_label]]
+                ill_vals.append((rate, se))
+            arr = load_accuracy(os.path.join(root_dir, diff_dir), file_label)
+            if arr is not None:
+                mean_e = float(arr[-1, 1])
+                sd_e = float(arr[-1, 2]) if arr.shape[1] > 2 else 0.0
+                err_vals.append((mean_e, sd_e * se_factor))
+            else:
+                err_vals.append(None)
+        gi = group_idx_counter.get("muzero", 0)
+        group_idx_counter["muzero"] = gi + 1
+        conditions.append((cond_display, "muzero", gi, ill_vals, err_vals))
+
+    # LLM conditions
+    for model_label, _ in LLM_MODELS:
+        short = llm_short.get(model_label, model_label)
+        for j, strat in enumerate(LLM_PROMPTING_STRATEGIES):
+            strat_s = llm_strat_short.get(strat, strat)
+            ill_vals, err_vals = [], []
+            any_data = False
+            for diff_dir, _ in diff_order:
+                data = load_llm_json(os.path.join(root_dir, diff_dir),
+                                     f"LLM_{model_label}_{strat}")
+                if data is not None:
+                    ill_vals.append((data["mean_illegal_rate"] * 100, data["se_illegal_rate"] * 100))
+                    err_vals.append((data["mean_error"], data["se_error"]))
+                    any_data = True
+                else:
+                    ill_vals.append(None)
+                    err_vals.append(None)
+            if any_data:
+                gi = group_idx_counter.get(model_label, 0)
+                group_idx_counter[model_label] = gi + 1
+                conditions.append((f"{short} ({strat_s})", model_label, gi, ill_vals, err_vals))
+
+    # ── Human reference data from CSV ─────────────────────────────────────────
+    # Optimal moves per difficulty for Goel et al. 2001 (5-disk ToH)
+    _goel_optimal = {"LS": 7.0, "MS": 10.6, "ES": 14.3}
+
+    csv_path = os.path.join(root_dir, "tables", "planning_comparison_human_only.csv")
+    if os.path.exists(csv_path):
+        import csv as _csv
+        with open(csv_path) as _f:
+            rows = list(_csv.DictReader(_f))
+
+        def _get_row(source_substr, metric):
+            for r in rows:
+                if metric in r["metric"] and source_substr.lower() in r["source"].lower():
+                    return r
+            return None
+
+        def _diff_vals(row, keys=("difficulty_close_easy", "difficulty_moderate_medium", "difficulty_far_hard")):
+            out = []
+            for k in keys:
+                v = row[k].strip()
+                out.append((float(v), 0.0) if v not in ("NA", "", "nan") else None)
+            return out
+
+        # NC controls — illegal rate (assumed baseline, Grafman 1992)
+        r_nc_ill = _get_row("NC controls — Grafman", "illegal_move_rate")
+        # CCA patients — illegal rate (schematic, Grafman 1992)
+        r_cca_ill = _get_row("CCA patients", "illegal_move_rate")
+        # NC controls — moves by difficulty (Goel et al. 2001)
+        r_nc_err  = _get_row("NC controls solved-only — Goel", "moves_per_problem_by_difficulty")
+        r_nc_sr   = _get_row("NC controls — Goel", "solve_rate")
+        # PFC patients — moves by difficulty (Goel et al. 2001)
+        r_pfc_err = _get_row("PFC patients solved-only", "moves_per_problem_by_difficulty")
+        r_pfc_sr  = _get_row("PFC patients — Goel", "solve_rate")
+
+        def _moves_to_error_imputed(moves_row, sr_row):
+            """Impute failed trials as 2× optimal moves, weighted by solve rate.
+
+            imputed_mean = solve_rate * solved_moves + (1 - solve_rate) * (2 * optimal)
+            imputed_error = imputed_mean - optimal
+            """
+            keys = ("difficulty_close_easy", "difficulty_moderate_medium", "difficulty_far_hard")
+            diffs = [d for d, _ in diff_order]
+            out = []
+            for k, d in zip(keys, diffs):
+                mv = moves_row[k].strip() if moves_row else "NA"
+                sr = sr_row[k].strip()   if sr_row   else "NA"
+                if mv not in ("NA", "", "nan") and sr not in ("NA", "", "nan"):
+                    solve_rate   = float(sr) / 100.0
+                    solved_moves = float(mv)
+                    opt          = _goel_optimal[d]
+                    fail_moves   = 2.0 * opt
+                    imputed_mean = solve_rate * solved_moves + (1 - solve_rate) * fail_moves
+                    out.append((imputed_mean - opt, 0.0))
+                elif mv not in ("NA", "", "nan"):
+                    # No solve rate — fall back to solved-only (original behaviour)
+                    out.append((float(mv) - _goel_optimal[d], 0.0))
+                else:
+                    out.append(None)
+            return out
+
+        # Build human conditions:
+        # NC controls — ill from Grafman, err from Goel (same population label)
+        nc_ill = _diff_vals(r_nc_ill) if r_nc_ill else [None] * 3
+        gi = group_idx_counter.get("human", 0); group_idx_counter["human"] = gi + 1
+        conditions.append(("NC controls (reference)", "human", gi, nc_ill, [None] * 3))
+
+        # CCA patients — ill only (Grafman schematic), no error data
+        cca_ill = _diff_vals(r_cca_ill) if r_cca_ill else [None] * 3
+        gi = group_idx_counter.get("human", 0); group_idx_counter["human"] = gi + 1
+        conditions.append(("CA patients (schematic)", "human", gi, cca_ill, [None] * 3))
+
+        # PFC patients — illegal rate only; error data removed from this panel
+        gi = group_idx_counter.get("human", 0); group_idx_counter["human"] = gi + 1
+        conditions.append(("PFC patients (reference)", "human", gi, [None] * 3, [None] * 3))
+
+    # ── Normalisation ─────────────────────────────────────────────────────────
+    def _norm_vals(vals, lo, hi):
+        rng = hi - lo if hi != lo else 1.0
+        return [((v[0] - lo) / rng, None) if v is not None else None for v in vals]
+
+    if norm_by == "model":
+        # Compute per-group (lo, hi) across all conditions and difficulties
+        from collections import defaultdict
+        group_ill_means = defaultdict(list)
+        group_err_means = defaultdict(list)
+        for _, grp, gi, iv, ev in conditions:
+            group_ill_means[grp].extend(v[0] for v in iv if v is not None)
+            group_err_means[grp].extend(v[0] for v in ev if v is not None)
+        group_ill_range = {g: (min(vs), max(vs)) for g, vs in group_ill_means.items() if vs}
+        group_err_range = {g: (min(vs), max(vs)) for g, vs in group_err_means.items() if vs}
+
+        normed = []
+        for name, grp, gi, iv, ev in conditions:
+            lo_i, hi_i = group_ill_range.get(grp, (0, 1))
+            lo_e, hi_e = group_err_range.get(grp, (0, 1))
+            normed.append((name, grp, gi, _norm_vals(iv, lo_i, hi_i),
+                           _norm_vals(ev, lo_e, hi_e)))
+    else:
+        # Per-condition normalisation (original behaviour)
+        normed = []
+        for name, grp, gi, iv, ev in conditions:
+            ill_means = [v[0] for v in iv if v is not None]
+            err_means = [v[0] for v in ev if v is not None]
+            lo_i, hi_i = (min(ill_means), max(ill_means)) if ill_means else (0, 1)
+            lo_e, hi_e = (min(err_means), max(err_means)) if err_means else (0, 1)
+            normed.append((name, grp, gi, _norm_vals(iv, lo_i, hi_i),
+                           _norm_vals(ev, lo_e, hi_e)))
+
+    x = np.arange(len(diff_order))
+    x_labels = [label for _, label in diff_order]
+
+    fig, (ax_sr, ax_err, ax_ill) = plt.subplots(3, 1, figsize=(5.5, 5.0), sharex=True)
+
+    # Per-(condition, x-position) dodge: only shift conditions whose y-value
+    # is within overlap_thr of another condition at the same x position.
+    def _compute_dodges(normed, n_x, overlap_thr=0.06, dodge_amt=0.02):
+        n_conds = len(normed)
+        dx = [[0.0] * n_x for _ in range(n_conds)]
+        for xi in range(n_x):
+            ys = {}
+            for ci, (_, _, _, norm_ill, norm_err) in enumerate(normed):
+                v = norm_ill[xi] if (xi < len(norm_ill) and norm_ill[xi] is not None) else \
+                    (norm_err[xi] if (xi < len(norm_err) and norm_err[xi] is not None) else None)
+                if v is not None:
+                    ys[ci] = v[0]
+            if not ys:
+                continue
+            sorted_conds = sorted(ys.items(), key=lambda t: t[1])
+            groups, cur = [], [sorted_conds[0]]
+            for i in range(1, len(sorted_conds)):
+                if abs(sorted_conds[i][1] - sorted_conds[i - 1][1]) < overlap_thr:
+                    cur.append(sorted_conds[i])
+                else:
+                    groups.append(cur)
+                    cur = [sorted_conds[i]]
+            groups.append(cur)
+            for group in groups:
+                if len(group) > 1:
+                    offsets = np.linspace(-(len(group) - 1) / 2,
+                                          (len(group) - 1) / 2,
+                                          len(group)) * dodge_amt
+                    for (ci, _), off in zip(group, offsets):
+                        dx[ci][xi] = off
+        return dx
+
+    dodge_dx = _compute_dodges(normed, len(diff_order))
+
+    human_names = {"NC controls (reference)", "CA patients (schematic)", "PFC patients (reference)"}
+
+    legend_handles = []
+    added_to_legend = set()
+    for ci, (cond_display, grp, gi, norm_ill, norm_err) in enumerate(normed):
+        is_human  = cond_display in human_names
+        color     = GROUP_COLORS.get(grp, "#888888")
+        dark_c    = _darken(color)
+        mlist     = GROUP_MARKERS.get(grp, ["o", "s", "^", "D"])
+        lslist    = GROUP_LINESTYLES.get(grp, ["-", "--", "-.", ":"])
+        marker    = mlist[gi % len(mlist)]
+        ls        = lslist[gi % len(lslist)]
+        alpha     = 0.7 if is_human else 1.0
+        lw        = 1.5 if is_human else 2.0
+
+        # ── Top panel: normalised illegal rate ────────────────────────────────
+        ill_x, ill_y = [], []
+        for xi, v in enumerate(norm_ill):
+            if v is not None:
+                ill_x.append(x[xi] + dodge_dx[ci][xi])
+                ill_y.append(v[0])
+        if ill_x:
+            ax_ill.plot(ill_x, ill_y, color=color, marker=marker,
+                        markersize=6 if is_human else 5,
+                        linestyle=ls, linewidth=lw, alpha=alpha,
+                        markeredgecolor=dark_c, markeredgewidth=0.6)
+
+        # ── Bottom panel: normalised mean error ───────────────────────────────
+        err_x, err_y = [], []
+        for xi, v in enumerate(norm_err):
+            if v is not None:
+                err_x.append(x[xi] + dodge_dx[ci][xi])
+                err_y.append(v[0])
+        if err_x:
+            ax_err.plot(err_x, err_y, color=color, marker=marker,
+                        markersize=6 if is_human else 5,
+                        linestyle=ls, linewidth=lw, alpha=alpha,
+                        markeredgecolor=dark_c, markeredgewidth=0.6)
+
+        # Add to legend once
+        if cond_display not in added_to_legend and (ill_x or err_x):
+            legend_handles.append(
+                mpl.lines.Line2D([0], [0], color=color, marker=marker,
+                                 markersize=6 if is_human else 5,
+                                 linewidth=lw, linestyle=ls, alpha=alpha,
+                                 markeredgecolor=dark_c, markeredgewidth=0.6,
+                                 label=cond_display)
+            )
+            added_to_legend.add(cond_display)
+
+    # ── Top panel: human solve rate (absolute) ───────────────────────────────
+    sr_legend_handles = []
+    if os.path.exists(csv_path):
+        sr_human = [
+            ("NC controls",  _get_row("NC controls — Goel", "solve_rate"),  "o", "-"),
+            ("PFC patients", _get_row("PFC patients — Goel", "solve_rate"), "s", "--"),
+        ]
+        human_color = GROUP_COLORS["human"]
+        human_dark  = _darken(human_color)
+        for label, row, marker, ls in sr_human:
+            if row is None:
+                continue
+            sr_vals = _diff_vals(row)
+            sr_x = [x[xi]         for xi, v in enumerate(sr_vals) if v is not None]
+            sr_y = [100.0 - v[0]  for v      in sr_vals             if v is not None]
+            if sr_x:
+                ax_sr.plot(sr_x, sr_y, color=human_color, marker=marker,
+                           markersize=5, linestyle=ls, linewidth=2.0,
+                           markeredgecolor=human_dark, markeredgewidth=0.6)
+                sr_legend_handles.append(
+                    mpl.lines.Line2D([0], [0], color=human_color, marker=marker,
+                                     markersize=5, linewidth=2.0, linestyle=ls,
+                                     markeredgecolor=human_dark, markeredgewidth=0.6,
+                                     label=label)
+                )
+
+    ax_sr.set_ylabel("Unsolved rate (%)", fontsize=font_s)
+    ax_sr.set_ylim(-5, 105)
+    ax_sr.spines["right"].set_visible(False)
+    ax_sr.spines["top"].set_visible(False)
+    ax_sr.tick_params(which="both", left=True, bottom=True,
+                      top=False, right=False, direction="out", labelsize=font_s)
+
+    ax_err.set_ylabel("Norm. mean error", fontsize=font_s)
+    ax_err.set_ylim(-0.05, 1.05)
+    ax_err.spines["right"].set_visible(False)
+    ax_err.spines["top"].set_visible(False)
+    ax_err.tick_params(which="both", left=True, bottom=True,
+                       top=False, right=False, direction="out", labelsize=font_s)
+
+    ax_ill.set_ylabel("Norm. illegal move rate", fontsize=font_s)
+    ax_ill.set_ylim(-0.05, 1.05)
+    ax_ill.set_xticks(x)
+    ax_ill.set_xticklabels(x_labels, fontsize=font_s)
+    ax_ill.spines["right"].set_visible(False)
+    ax_ill.spines["top"].set_visible(False)
+    ax_ill.tick_params(which="both", left=True, bottom=True,
+                       top=False, right=False, direction="out", labelsize=font_s)
+
+    fig.legend(handles=legend_handles, title="Model", fontsize=font_s - 1,
+               title_fontsize=font_s - 1, loc="lower center",
+               bbox_to_anchor=(0.5, -0.02), frameon=False,
+               ncol=min(len(legend_handles), 4))
+
+    fig.tight_layout(rect=[0, 0.10, 1, 1])
+    suffix = "_model_norm" if norm_by == "model" else ""
+    out = os.path.join(root_dir, f"IllegalRate_MeanError_Lines{suffix}_{timestamp}.pdf")
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out}")
@@ -1523,6 +1897,12 @@ def main():
 
     print("[6b/13] Illegal move rate — condensed stacked")
     fig_illegal_rate_stacked(root_dir, args.timestamp)
+
+    print("[6c/13] Illegal rate + mean error — line charts (condition-normalised)")
+    fig_illegal_rate_and_error_lines(root_dir, args.timestamp, args.muzero_runs, norm_by="condition")
+
+    print("[6d/13] Illegal rate + mean error — line charts (model-normalised)")
+    fig_illegal_rate_and_error_lines(root_dir, args.timestamp, args.muzero_runs, norm_by="model")
 
     print("[7/13] LLM feedback sweep")
     fig_feedback_sweep(root_dir, args.timestamp)

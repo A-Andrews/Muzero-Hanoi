@@ -496,7 +496,8 @@ def save_results(
     acc_path = os.path.join(save_dir, file_stem + "_actingAccuracy.pt")
     torch.save(acc_tensor, acc_path)
 
-    # actingAccuracy_error.pt  — shape (1, 3): [[n_sims, mean_error, se_error]]
+    # actingAccuracy_error.pt  — shape (1, 3): [[n_sims, mean_error, std_error]]
+    # (std, not SE — consistent with multi_run_ablation_eval.py; plotting code divides by sqrt(n_runs))
     err_tensor = torch.tensor([[0.0, mean_e, std_e]])
     err_path = os.path.join(save_dir, file_stem + "_actingAccuracy_error.pt")
     torch.save(err_tensor, err_path)

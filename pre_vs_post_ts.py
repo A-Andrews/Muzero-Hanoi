@@ -77,6 +77,8 @@ def main():
 
     setup_logger(args.seed)
     set_plot_style()
+    import seaborn as sns
+    sns.set_style("ticks")  # override "white" to restore tick marks
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -113,42 +115,43 @@ def main():
     action_labels = [f"{a[0]}\u2192{a[1]}" for a in env.moves]
     x = np.arange(len(action_labels))
 
-    fig, axs = plt.subplots(1, len(policies), figsize=(12, 4), sharey=True)
+    uniform = 1 / len(action_labels)
+
+    fig, axs = plt.subplots(1, len(policies), figsize=(9, 3.2), sharey=True)
+    fig.subplots_adjust(wspace=0.05)
     if len(policies) == 1:
         axs = [axs]
     for ax, (name, (init_pol, final_pol)) in zip(axs, policies.items()):
-        init_err = wilson_error(init_pol, 50)
-        final_err = wilson_error(final_pol, 50)
         ax.bar(
             x - 0.2,
             init_pol,
-            yerr=init_err,
-            capsize=5,
             width=0.4,
+            color=PLOT_COLORS[0],
             label="Initial",
         )
         ax.bar(
             x + 0.2,
             final_pol,
-            yerr=final_err,
-            capsize=5,
             width=0.4,
+            color=PLOT_COLORS[1],
             label="After MCTS",
         )
-        ax.set_title(name)
+        ax.axhline(uniform, color="gray", linestyle=":", linewidth=1, alpha=0.7)
+        ax.set_title(name, fontsize=14)
         ax.set_xticks(x)
-        ax.set_xticklabels(action_labels, rotation=45)
+        ax.set_xticklabels(action_labels, rotation=0, fontsize=12)
+        ax.tick_params(axis="y", labelsize=12)
         ax.set_ylim(0, 1)
         ax.spines["right"].set_visible(False)
         ax.spines["top"].set_visible(False)
-    axs[0].set_ylabel("Probability")
-    axs[-1].legend(loc="upper right")
+    axs[0].set_ylabel("Probability", fontsize=13)
+    axs[-1].legend(loc="upper right", fontsize=12)
     plt.tight_layout()
 
     save_dir = os.path.join("stats", "Hanoi", args.timestamp)
     os.makedirs(save_dir, exist_ok=True)
-    fig_path = os.path.join(save_dir, "policy_evolution.png")
-    plt.savefig(fig_path, dpi=300)
+    fig_path = os.path.join(save_dir, "policy_evolution.pdf")
+    plt.savefig(fig_path)
     plt.close(fig)
     print(f"Plot saved to {fig_path}")
 
@@ -162,7 +165,8 @@ def main():
     for idx, (name, (init_pol, final_pol)) in enumerate(policies.items()):
         color = PLOT_COLORS[idx % len(PLOT_COLORS)]
         for stage, dist in (("Initial", init_pol), ("After MCTS", final_pol)):
-            err = wilson_error(dist, 50)
+            # Only MCTS policy (visit counts / n_simulations) supports Wilson CI
+            err = wilson_error(dist, args.n_simulations) if stage == "After MCTS" else None
             style = stage_styles[stage]
             overlay_ax.errorbar(
                 x,
@@ -187,8 +191,8 @@ def main():
     overlay_ax.legend(ncol=2, loc="upper right")
     overlay_fig.tight_layout()
 
-    overlay_path = os.path.join(save_dir, "policy_evolution_overlay.png")
-    overlay_fig.savefig(overlay_path, dpi=300)
+    overlay_path = os.path.join(save_dir, "policy_evolution_overlay.pdf")
+    overlay_fig.savefig(overlay_path)
     plt.close(overlay_fig)
     print(f"Overlay plot saved to {overlay_path}")
 
